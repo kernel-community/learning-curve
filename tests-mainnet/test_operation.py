@@ -59,7 +59,7 @@ def test_full_mint(
     print("----- MINT -----")
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
-        assert "LearnMinted" in tx.events
+        assert "LearnMintedFromCourse" in tx.events
         print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("YDAI Balance: " + str(ydai.balanceOf(kernel)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))

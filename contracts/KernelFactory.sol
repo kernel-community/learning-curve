@@ -6,7 +6,6 @@ import "./LearningCurve.sol";
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface I_Vault {
@@ -31,7 +30,6 @@ interface I_LearningCurve {
  */
 
 contract KernelFactory {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -44,7 +42,6 @@ contract KernelFactory {
     struct Learner {
         uint256 blockRegistered;        // used to decide when a learner can claim their registration fee back
         uint256 yieldBatchId;           // the batch id for this learner's Yield bearing deposit
-        uint256 feeRedeemed;            // the amount of their fee that they have redeemed
         uint256 checkpointReached;      // what checkpoint the user has reached
     }
 
@@ -80,15 +77,31 @@ contract KernelFactory {
         uint256 fee,
         uint256 checkpointBlockSpacing
     );
+
     event LearnerRegistered(
-        uint256 courseId
+        uint256 indexed courseId,
+        address learner
     );
-    event FeeRedeemed();
-    event LearnMinted(
+    event FeeRedeemed(
         uint256 courseId,
+        address learner,
         uint256 amount
     );
-    event BatchDeposited();
+    event LearnMintedFromCourse(
+        uint256 courseId,
+        address learner,
+        uint256 amount
+    );
+    event BatchDeposited(
+        uint256 batchId,
+        uint256 batchAmount,
+        uint256 batchYieldAmount
+    );
+    event CheckpointUpdated(
+        uint256 courseId,
+        uint256 checkpointReached,
+        address learner
+    );
 
     constructor(
         address _stable,
@@ -142,7 +155,7 @@ contract KernelFactory {
         uint256 yTokens = vault.deposit(batchAmount_);
         batchYieldTotal[batchId_] = yTokens;
 
-        emit BatchDeposited();
+        emit BatchDeposited(batchId_, batchAmount_, yTokens);
     }
 
     /**
@@ -162,7 +175,7 @@ contract KernelFactory {
          batchTotal[batchId_] += course.fee;
          userDeposit[batchId_][msg.sender] += course.fee;
 
-         emit LearnerRegistered(_courseId);
+         emit LearnerRegistered(_courseId, msg.sender);
      }
 
     /**
@@ -200,8 +213,8 @@ contract KernelFactory {
      * @return checkpointReached the checkpoint that the learner has reached.
      */
      function _verify(address learner, uint256 _courseId) internal view returns (uint256 checkpointReached){
-         uint256 blocksSinceRegister = block.number.sub(learnerData[_courseId][learner].blockRegistered);
-         checkpointReached = blocksSinceRegister.div(courses[_courseId].checkpointBlockSpacing);
+         uint256 blocksSinceRegister = block.number - learnerData[_courseId][learner].blockRegistered;
+         checkpointReached = blocksSinceRegister / courses[_courseId].checkpointBlockSpacing;
          if (courses[_courseId].checkpoints < checkpointReached){
              checkpointReached = courses[_courseId].checkpoints;
          }
@@ -234,16 +247,19 @@ contract KernelFactory {
              shares = vault.withdraw(learnerShares);
              uint256 fee_ = courses[_courseId].fee;
              if (fee_ < shares){
-                 stable.safeTransfer(kernelTreasury, shares.sub(fee_));
+                 stable.safeTransfer(kernelTreasury, shares - fee_);
                  stable.safeTransfer(msg.sender, fee_);
+                 emit FeeRedeemed(_courseId, msg.sender, fee_);
              } else {
                  stable.safeTransfer(msg.sender, shares);
+                 emit FeeRedeemed(_courseId, msg.sender, shares);
              }
          } else {
              stable.safeTransfer(msg.sender, learnerShares);
+             emit FeeRedeemed(_courseId, msg.sender, learnerShares);
          }
 
-         emit FeeRedeemed();
+
      }
 
     /**
@@ -268,7 +284,7 @@ contract KernelFactory {
         }
         stable.approve(address(learningCurve), shares);
         learningCurve.mintForAddress(msg.sender, shares);
-        emit LearnMinted(_courseId, shares);
+        emit LearnMintedFromCourse(_courseId, msg.sender, shares);
      }
 
     /**
@@ -283,10 +299,11 @@ contract KernelFactory {
         uint256 fee = userDeposit[_courseId][msg.sender];
         require(fee > 0, "no fee to redeem");
         uint256 checkpointReached = verify(msg.sender, _courseId);
-        uint256 eligibleAmount = checkpointReached
-            .sub(learnerData[_courseId][msg.sender].checkpointReached)
-            .mul(courses[_courseId].fee);
+        uint256 eligibleAmount = (checkpointReached
+            - learnerData[_courseId][msg.sender].checkpointReached)
+            * courses[_courseId].fee;
         learnerData[_courseId][msg.sender].checkpointReached = checkpointReached;
+        emit CheckpointUpdated(_courseId, checkpointReached, msg.sender);
         if (eligibleAmount > fee){
             eligibleAmount = fee;
         }
@@ -295,8 +312,8 @@ contract KernelFactory {
             undeployed = true;
             eligibleShares = eligibleAmount;
         } else {
-            uint256 temp =  eligibleAmount.mul(1e18).div(batchTotal[batchId_]);
-            eligibleShares = temp.mul(batchYieldTotal[batchId_]).div(1e18);
+            uint256 temp =  (eligibleAmount * 1e18) / batchTotal[batchId_];
+            eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
         }
         userDeposit[_courseId][msg.sender] -= eligibleAmount;
     }
