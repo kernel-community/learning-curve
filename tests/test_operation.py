@@ -43,7 +43,7 @@ def test_full(deployer, learners, steward, contracts, token):
 
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
-        assert "LearnMinted" in tx.events
+        assert "LearnMintedFromCourse" in tx.events
         print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI collateral: " + str(token.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))

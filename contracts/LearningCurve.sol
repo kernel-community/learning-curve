@@ -6,7 +6,6 @@ import "./PRBMathUD60x18.sol";
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
@@ -17,7 +16,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  */
 contract LearningCurve is ERC20 {
     using SafeERC20 for IERC20;
-    using SafeMath for uint256;
 
     // the constant product used in the curve
     uint public constant k = 10000;
@@ -55,8 +53,8 @@ contract LearningCurve is ERC20 {
     function mint(uint256 _wad) public {
         require(initialised, "!initialised");
         reserve.safeTransferFrom(msg.sender, address(this), _wad);
-        uint256 ln = doLn((reserveBalance.add(_wad).mul(1e18)).div(reserveBalance)) ;
-        uint256 learnMagic = k.mul(ln);
+        uint256 ln = doLn((((reserveBalance + _wad) * 1e18)) / reserveBalance);
+        uint256 learnMagic = k * ln;
         reserveBalance += _wad;
         _mint(msg.sender, learnMagic);
     }
@@ -73,8 +71,8 @@ contract LearningCurve is ERC20 {
     function mintForAddress(address learner, uint256 _wad) public {
         require(initialised, "!initialised");
         reserve.safeTransferFrom(msg.sender, address(this), _wad);
-        uint256 ln = doLn((reserveBalance.add(_wad).mul(1e18)).div(reserveBalance)) ;
-        uint256 learnMagic = k.mul(ln);
+        uint256 ln = doLn((((reserveBalance + _wad) * 1e18)) / reserveBalance);
+        uint256 learnMagic = k * ln;
         reserveBalance += _wad;
         _mint(learner, learnMagic);
     }
@@ -87,8 +85,8 @@ contract LearningCurve is ERC20 {
     */
     function burn(uint256 _daiToReceive) public {
         require(initialised, "!initialised");
-        uint256 ln = doLn((reserveBalance.mul(1e18)).div(reserveBalance.sub(_daiToReceive)));
-        uint256 learnMagic = k.mul(ln);
+        uint256 ln = doLn((reserveBalance * 1e18) / (reserveBalance - _daiToReceive));
+        uint256 learnMagic = k * ln;
         _burn(msg.sender, learnMagic);
         reserveBalance -= _daiToReceive;
         reserve.safeTransfer(msg.sender, _daiToReceive);
@@ -108,8 +106,8 @@ contract LearningCurve is ERC20 {
     * @param  reserveAmount the amount of DAI to burn
     */
     function getBurnableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
-        uint256 ln = doLn((reserveBalance.mul(1e18)).div(reserveBalance.sub(reserveAmount)));
-        learnMagic = k.mul(ln);
+        uint256 ln = doLn((reserveBalance * 1e18) / (reserveBalance - reserveAmount));
+        uint256 learnMagic = k * ln;
     }
 
 }
