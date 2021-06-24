@@ -21,6 +21,7 @@ interface I_Vault {
 
 interface I_LearningCurve {
     function mintForAddress(address, uint256) external;
+    function balanceOf(address) external view returns (uint256);
 }
 
 /**
@@ -90,7 +91,8 @@ contract KernelFactory {
     event LearnMintedFromCourse(
         uint256 courseId,
         address learner,
-        uint256 amount
+        uint256 stableConverted,
+        uint256 learnMinted
     );
     event BatchDeposited(
         uint256 batchId,
@@ -241,7 +243,7 @@ contract KernelFactory {
          uint256 shares;
          uint256 learnerShares;
          bool undeployed;
-         require(learnerData[_courseId][msg.sender].blockRegistered != 0, "redeem: not a learner");
+         require(learnerData[_courseId][msg.sender].blockRegistered != 0, "redeem: not a learner on this course");
          (learnerShares, undeployed) = getEligibleAmount(_courseId);
          if (!undeployed){
              shares = vault.withdraw(learnerShares);
@@ -277,14 +279,15 @@ contract KernelFactory {
     function mint(uint256 _courseId) external {
         uint256 shares;
         bool undeployed;
-        require(learnerData[_courseId][msg.sender].blockRegistered != 0, "mint: not a learner");
+        require(learnerData[_courseId][msg.sender].blockRegistered != 0, "mint: not a learner on this course");
         (shares, undeployed) = getEligibleAmount(_courseId);
         if (!undeployed){
             shares = vault.withdraw(shares);
         }
         stable.approve(address(learningCurve), shares);
+        uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
         learningCurve.mintForAddress(msg.sender, shares);
-        emit LearnMintedFromCourse(_courseId, msg.sender, shares);
+        emit LearnMintedFromCourse(_courseId, msg.sender, shares, learningCurve.balanceOf(msg.sender) - balanceBefore);
      }
 
     /**
@@ -299,11 +302,14 @@ contract KernelFactory {
         uint256 fee = userDeposit[_courseId][msg.sender];
         require(fee > 0, "no fee to redeem");
         uint256 checkpointReached = verify(msg.sender, _courseId);
+
         uint256 eligibleAmount = (checkpointReached
             - learnerData[_courseId][msg.sender].checkpointReached)
-            * courses[_courseId].fee;
+            * (courses[_courseId].fee / courses[_courseId].checkpoints);
         learnerData[_courseId][msg.sender].checkpointReached = checkpointReached;
+
         emit CheckpointUpdated(_courseId, checkpointReached, msg.sender);
+
         if (eligibleAmount > fee){
             eligibleAmount = fee;
         }
@@ -332,5 +338,22 @@ contract KernelFactory {
 
     function getNextCourseId() external view returns (uint256){
         return courseIdTracker.current();
+    }
+
+    /// @dev not including any yield
+    function getUserCourseEligibleFunds(address learner, uint256 _courseId) external view returns (uint256){
+        uint256 checkPointReached = verify(learner, _courseId);
+        uint256 checkPointRedeemed = learnerData[_courseId][learner].checkpointReached;
+        if (checkPointReached <= checkPointRedeemed){
+            return 0;
+        }
+        return (courses[_courseId].fee / courses[_courseId].checkpoints) * (checkPointReached - checkPointRedeemed);
+    }
+
+        /// @dev not including any yield
+    function getUserCourseFundsRemaining(address learner, uint256 _courseId) external view returns (uint256){
+        uint256 checkPointReached = verify(learner, _courseId);
+        uint256 checkPointRedeemed = learnerData[_courseId][learner].checkpointReached;
+        return (courses[_courseId].fee / courses[_courseId].checkpoints) * (courses[_courseId].checkpoints - checkPointRedeemed);
     }
 }
