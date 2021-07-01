@@ -302,10 +302,12 @@ contract KernelFactory {
         uint256 fee = userDeposit[_courseId][msg.sender];
         require(fee > 0, "no fee to redeem");
         uint256 checkpointReached = verify(msg.sender, _courseId);
-
+        require(checkpointReached > learnerData[_courseId][msg.sender].checkpointReached,
+            "fee redeemed at this checkpoint");
         uint256 eligibleAmount = (checkpointReached
             - learnerData[_courseId][msg.sender].checkpointReached)
             * (courses[_courseId].fee / courses[_courseId].checkpoints);
+
         learnerData[_courseId][msg.sender].checkpointReached = checkpointReached;
 
         emit CheckpointUpdated(_courseId, checkpointReached, msg.sender);
@@ -340,20 +342,36 @@ contract KernelFactory {
         return courseIdTracker.current();
     }
 
-    /// @dev not including any yield
+    /// @dev rough calculation used for frontend work
     function getUserCourseEligibleFunds(address learner, uint256 _courseId) external view returns (uint256){
         uint256 checkPointReached = verify(learner, _courseId);
         uint256 checkPointRedeemed = learnerData[_courseId][learner].checkpointReached;
         if (checkPointReached <= checkPointRedeemed){
             return 0;
         }
-        return (courses[_courseId].fee / courses[_courseId].checkpoints) * (checkPointReached - checkPointRedeemed);
+        uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
+        uint256 eligibleFunds = (courses[_courseId].fee / courses[_courseId].checkpoints) * (checkPointReached - checkPointRedeemed);
+        if (batchId_ == batchIdTracker.current()){
+            return eligibleFunds;
+        } else {
+            uint256 temp =  (eligibleFunds * 1e18) / batchTotal[batchId_];
+            uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
+            return eligibleShares * vault.pricePerShare() / 1e18;
+        }
     }
 
-        /// @dev not including any yield
+        /// @dev rough calculation used for frontend work
     function getUserCourseFundsRemaining(address learner, uint256 _courseId) external view returns (uint256){
         uint256 checkPointReached = verify(learner, _courseId);
         uint256 checkPointRedeemed = learnerData[_courseId][learner].checkpointReached;
-        return (courses[_courseId].fee / courses[_courseId].checkpoints) * (courses[_courseId].checkpoints - checkPointRedeemed);
+        uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
+        uint256 eligibleFunds = (courses[_courseId].fee / courses[_courseId].checkpoints) * (courses[_courseId].checkpoints - checkPointRedeemed);
+        if (batchId_ == batchIdTracker.current()){
+            return eligibleFunds;
+        } else {
+            uint256 temp =  (eligibleFunds * 1e18) / batchTotal[batchId_];
+            uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
+            return eligibleShares * vault.pricePerShare() / 1e18;
+        }
     }
 }

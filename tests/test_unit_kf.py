@@ -92,11 +92,14 @@ def test_mint(contracts_with_learners, learners, token, deployer):
         assert learning_curve.balanceOf(learner) == learner_lc_balance + mintable_balance
 
 
-def test_mint_malicious(contracts_with_learners, hackerman):
+def test_mint_malicious(contracts_with_learners, hackerman, learners):
     kernel, learning_curve = contracts_with_learners
     brownie.chain.mine(constants.CHECKPOINTS * constants.CHECKPOINT_BLOCK_SPACING)
     with brownie.reverts("mint: not a learner on this course"):
         kernel.mint(0, {"from": hackerman})
+    kernel.mint(0, {"from": learners[0]})
+    with brownie.reverts("no fee to redeem"):
+        kernel.mint(0, {"from": learners[0]})
 
 
 def test_mint_diff_checkpoints(contracts_with_learners, learners, token):
@@ -121,6 +124,12 @@ def test_mint_diff_checkpoints(contracts_with_learners, learners, token):
             assert token.balanceOf(learning_curve) == lc_dai_balance + dai_balance
             assert token.balanceOf(kernel) == kf_dai_balance - dai_balance
             assert learning_curve.balanceOf(learner) == learner_lc_balance + mintable_balance
+            if m < constants.CHECKPOINTS - 1:
+                with brownie.reverts("fee redeemed at this checkpoint"):
+                    kernel.mint(0, {"from": learner})
+            else:
+                with brownie.reverts("no fee to redeem"):
+                    kernel.mint(0, {"from": learner})
     assert token.balanceOf(kernel) == 0
 
 
@@ -141,11 +150,14 @@ def test_redeem(contracts_with_learners, learners, token, kernelTreasury):
         assert token.balanceOf(learner) == dai_balance
 
 
-def test_redeem_malicious(hackerman, contracts_with_learners):
+def test_redeem_malicious(hackerman, contracts_with_learners, learners):
     kernel, learning_curve = contracts_with_learners
     brownie.chain.mine(constants.CHECKPOINTS * constants.CHECKPOINT_BLOCK_SPACING)
     with brownie.reverts("redeem: not a learner on this course"):
         kernel.redeem(0, {"from": hackerman})
+    kernel.redeem(0, {"from": learners[0]})
+    with brownie.reverts("no fee to redeem"):
+        kernel.redeem(0, {"from": learners[0]})
 
 
 def test_redeem_diff_checkpoints(contracts_with_learners, learners, token, kernelTreasury):
@@ -168,6 +180,12 @@ def test_redeem_diff_checkpoints(contracts_with_learners, learners, token, kerne
             assert kt_dai_balance == token.balanceOf(kernelTreasury)
             assert token.balanceOf(kernel) == kf_dai_balance - dai_balance
             assert token.balanceOf(learner) == learner_dai_balance + dai_balance
+            if m < constants.CHECKPOINTS - 1:
+                with brownie.reverts("fee redeemed at this checkpoint"):
+                    kernel.mint(0, {"from": learner})
+            else:
+                with brownie.reverts("no fee to redeem"):
+                    kernel.mint(0, {"from": learner})
     assert token.balanceOf(kernel) == 0
 
 

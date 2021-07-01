@@ -39,7 +39,7 @@ def test_full(deployer, learners, steward, contracts, token):
 
     brownie.chain.mine(500)
 
-    assert kernel.verify(learners[7], 0, {"from": steward}) == constants.CHECKPOINTS
+    assert kernel.verify(learners[0], 0, {"from": steward}) == constants.CHECKPOINTS
 
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
