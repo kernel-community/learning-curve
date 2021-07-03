@@ -67,6 +67,7 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
     brownie.chain.mine(constants.CHECKPOINTS * constants.CHECKPOINT_BLOCK_SPACING)
     tx = kernel.batchDeposit({"from": keeper})
     brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 5)
+    brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
 
     for n, learner in enumerate(learners):
@@ -84,52 +85,61 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
         assert abs(token.balanceOf(learning_curve) - lc_dai_balance - dai_balance) < constants.ACCURACY_Y
         assert abs(token.balanceOf(kernel) - kf_dai_balance) < constants.ACCURACY
         assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants.ACCURACY_Y
+    assert token.balanceOf(kernel) == 0
+    assert ydai.balanceOf(kernel) < 1000
 
-
-def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat):
+def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai):
     kernel, learning_curve = contracts_with_learners
     tx = kernel.batchDeposit({"from": keeper})
     for m in range(constants.CHECKPOINTS):
+        brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING)
+        gen_lev_strat.harvest({"from": keeper})
         for n, learner in enumerate(learners):
             dai_balance = kernel.getUserCourseEligibleFunds(learner, 0)
             mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
             lc_dai_balance = token.balanceOf(learning_curve)
-            kf_dai_balance = token.balanceOf(kernel)
+            kf_ydai_balance = ydai.balanceOf(kernel)
             learner_lc_balance = learning_curve.balanceOf(learner)
             tx = kernel.mint(0, {"from": learner})
             assert "LearnMintedFromCourse" in tx.events
             assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants.ACCURACY_Y
             assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - dai_balance) < constants.ACCURACY_Y
             assert kernel.verify(learner, 0) == m + 1
-            assert kernel.getUserCourseFundsRemaining(learner, 0) == constants.FEE - (
-                    constants.FEE/constants.CHECKPOINTS) * (m+1)
+            assert (constants.FEE - (constants.FEE / constants.CHECKPOINTS) * m) > \
+                   kernel.getUserCourseFundsRemaining(learner, 0) > \
+                   (constants.FEE - (constants.FEE / constants.CHECKPOINTS) * (m + 2))
             assert kernel.getUserCourseEligibleFunds(learner, 0) == 0
-            assert token.balanceOf(learning_curve) == lc_dai_balance + dai_balance
-            assert token.balanceOf(kernel) == kf_dai_balance - dai_balance
-            assert learning_curve.balanceOf(learner) == learner_lc_balance + mintable_balance
-            brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING)
-            gen_lev_strat.harvest({"from": keeper})
+            assert abs(token.balanceOf(learning_curve) - (lc_dai_balance + dai_balance)) < constants.ACCURACY_Y
+            assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (dai_balance*1e18)/ydai.pricePerShare())) < \
+                   constants.ACCURACY_Y
+            assert abs(learning_curve.balanceOf(learner) - (learner_lc_balance + mintable_balance)) < constants.ACCURACY_Y
     assert token.balanceOf(kernel) == 0
+    assert ydai.balanceOf(kernel) < 1000
 
 
-def test_redeem(contracts_with_learners, learners, token, kernelTreasury, keeper, gen_lev_strat):
+def test_redeem(contracts_with_learners, learners, token, kernelTreasury, keeper, gen_lev_strat, ydai):
     kernel, learning_curve = contracts_with_learners
     brownie.chain.mine(constants.CHECKPOINTS * constants.CHECKPOINT_BLOCK_SPACING)
     tx = kernel.batchDeposit({"from": keeper})
     brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 5)
+    brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
     for n, learner in enumerate(learners):
         dai_balance = kernel.getUserCourseEligibleFunds(learner, 0)
         kt_dai_balance = token.balanceOf(kernelTreasury)
-        kf_dai_balance = token.balanceOf(kernel)
+        kf_ydai_balance = ydai.balanceOf(kernel)
         tx = kernel.redeem(0, {"from": learner})
         assert "FeeRedeemed" in tx.events
-        assert abs(tx.events["FeeRedeemed"]["amount"] - dai_balance) < constants.ACCURACY_Y
+        assert tx.events["FeeRedeemed"]["amount"] == constants.FEE
         assert kernel.verify(learner, 0) == constants.CHECKPOINTS
         assert kernel.getUserCourseEligibleFunds(learner, 0) == 0
         assert kt_dai_balance <= token.balanceOf(kernelTreasury)
-        assert token.balanceOf(kernel) == kf_dai_balance - dai_balance
-        assert token.balanceOf(learner) == dai_balance
+        assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (dai_balance*1e18)/ydai.pricePerShare())) < constants.ACCURACY_Y
+        assert token.balanceOf(learner) == constants.FEE
+        assert token.balanceOf(learning_curve) == 1e18
+        assert ydai.balanceOf(learning_curve) == 0
+    assert token.balanceOf(kernel) == 0
+    assert ydai.balanceOf(kernel) < 1000
 
 
 def test_redeem_diff_checkpoints(
@@ -138,29 +148,34 @@ def test_redeem_diff_checkpoints(
         token,
         kernelTreasury,
         keeper,
-        gen_lev_strat
+        gen_lev_strat,
+        ydai
 ):
     kernel, learning_curve = contracts_with_learners
     tx = kernel.batchDeposit({"from": keeper})
     for m in range(constants.CHECKPOINTS):
         brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING)
+        brownie.chain.sleep(100)
         gen_lev_strat.harvest({"from": keeper})
         for n, learner in enumerate(learners):
             dai_balance = kernel.getUserCourseEligibleFunds(learner, 0)
             kt_dai_balance = token.balanceOf(kernelTreasury)
-            kf_dai_balance = token.balanceOf(kernel)
-            learner_dai_balance = token.balanceOf(learner)
+            kf_ydai_balance = ydai.balanceOf(kernel)
             tx = kernel.redeem(0, {"from": learner})
             assert "FeeRedeemed" in tx.events
             assert abs(tx.events["FeeRedeemed"]["amount"] - dai_balance) < constants.ACCURACY_Y
             assert kernel.verify(learner, 0) == m + 1
-            assert kernel.getUserCourseFundsRemaining(learner, 0) == constants.FEE - (
-                    constants.FEE/constants.CHECKPOINTS) * (m+1)
+            assert (constants.FEE - (constants.FEE / constants.CHECKPOINTS) * m) > \
+                   kernel.getUserCourseFundsRemaining(learner, 0) > \
+                   (constants.FEE - (constants.FEE / constants.CHECKPOINTS) * (m + 2))
             assert kernel.getUserCourseEligibleFunds(learner, 0) == 0
             assert kt_dai_balance == token.balanceOf(kernelTreasury)
-            assert token.balanceOf(kernel) == kf_dai_balance - dai_balance
-            assert token.balanceOf(learner) == learner_dai_balance + dai_balance
+            assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (dai_balance * 1e18) / ydai.pricePerShare())) < \
+                   constants.ACCURACY_Y
+            assert token.balanceOf(learning_curve) == 1e18
+            assert ydai.balanceOf(learning_curve) == 0
     assert token.balanceOf(kernel) == 0
+    assert ydai.balanceOf(kernel) < 1000
 
 
 def test_verify(contracts_with_learners, learners, keeper):

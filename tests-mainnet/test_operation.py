@@ -74,9 +74,9 @@ def test_full_mint(
             learning_curve,
             learning_curve.getBurnableForReserveAmount(constants.FEE),
             {"from": learner})
-        tx = learning_curve.burn(constants.FEE * 9/10, {"from": learner})
-        assert learning_curve.balanceOf(learner) > lc_balance_before
-        assert dai.balanceOf(learner) == constants.FEE * 9/10
+        tx = learning_curve.burn(constants.FEE, {"from": learner})
+        assert learning_curve.balanceOf(learner) < lc_balance_before
+        assert dai.balanceOf(learner) == constants.FEE
         print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(dai.balanceOf(learner)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))

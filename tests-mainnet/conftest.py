@@ -92,11 +92,11 @@ def ydai():
 
 @pytest.fixture
 def gen_lev_strat():
-    yield Contract.from_explorer("0x4031afd3B0F71Bace9181E554A9E680Ee4AbE7dF")
+    yield Contract.from_explorer("0x9f51F4df0b275dfB1F74f6Db86219bAe622B36ca")
 
 @pytest.fixture
 def keeper():
-    yield accounts.at("0xC3D6880fD95E06C816cB030fAc45b3ffe3651Cb0", force=True)
+    yield accounts.at("0x736d7e3c5a6cb2ce3b764300140abf476f6cfccf", force=True)
 
 
 @pytest.fixture
