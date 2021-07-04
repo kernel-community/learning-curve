@@ -40,14 +40,14 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice      This method allows anyone to mint LEARN tokens dependent on the
-    *              amount of DAI they send.
+    * @notice This method allows anyone to mint LEARN tokens dependent on the
+    *         amount of DAI they send.
     *
-    *              The amount minted depends on the amount of collateral already locked in
-    *              the curve. The more DAI is locked, the less LEARN gets minted, ensuring
-    *              that the price of LEARN increases linearly.
+    *         The amount minted depends on the amount of collateral already locked in
+    *         the curve. The more DAI is locked, the less LEARN gets minted, ensuring
+    *         that the price of LEARN increases linearly.
     *
-    *              Please see: https://docs.google.com/spreadsheets/d/1hjWFGPC_B9D7b6iI00DTVVLrqRFv3G5zFNiCBS7y_V8/edit?usp=sharing
+    *         Please see: https://docs.google.com/spreadsheets/d/1hjWFGPC_B9D7b6iI00DTVVLrqRFv3G5zFNiCBS7y_V8/edit?usp=sharing
     * @param  _wad amount of Dai to send to the contract
     */
     function mint(uint256 _wad) public {
@@ -60,13 +60,13 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice        Same as normal mint, except that an address is passed in which the minted
-    *                LEARN is sent to. Necessary to allow for mints directly from a Course, where
-    *                we want to learner to receive LEARN, not the course contract.
+    * @notice Same as normal mint, except that an address is passed in which the minted
+    *         LEARN is sent to. Necessary to allow for mints directly from a Course, where
+    *         we want to learner to receive LEARN, not the course contract.
     *
-    *                Can be used to send DAI from one address and have LEARN returned to another.
-    * @param learner address of the learner to mint LEARN to
-    * @param _wad    amount of DAI being sent in.
+    *         Can be used to send DAI from one address and have LEARN returned to another.
+    * @param  learner address of the learner to mint LEARN to
+    * @param  _wad    amount of DAI being sent in.
     */
     function mintForAddress(address learner, uint256 _wad) public {
         require(initialised, "!initialised");
@@ -78,9 +78,9 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice               used to burn LEARN and return DAI to the sender. The amount of dai that the burner wants
-    *                       to be received should be sent in, this is because providing a Learn and converting to DAI
-    *                       is complex mathematically.
+    * @notice used to burn LEARN and return DAI to the sender. The amount of dai that the burner wants
+    *         to be received should be sent in, this is because providing a Learn and converting to DAI
+    *         is complex mathematically.
     * @param  _daiToReceive amount of dai the burner would like to receive
     */
     function burn(uint256 _daiToReceive) public {
@@ -93,7 +93,7 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice   Calculates the natural logarithm of x.
+    * @notice Calculates the natural logarithm of x.
     * @param  x the number to be magic'd
     */
     function doLn(uint256 x) internal pure returns (uint256 result) {
@@ -102,12 +102,21 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice               calculates the amount of LEARN to burn given the amount of DAI requested.
+    * @notice calculates the amount of LEARN to burn given the amount of DAI requested.
     * @param  reserveAmount the amount of DAI to burn
     */
     function getBurnableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
         uint256 ln = doLn((reserveBalance * 1e18) / (reserveBalance - reserveAmount));
-        uint256 learnMagic = k * ln;
+        learnMagic = k * ln;
+    }
+
+    /**
+    * @notice calculates the amount of LEARN to mint given the amount of DAI requested.
+    * @param  reserveAmount the amount of DAI to mint
+    */
+    function getMintableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
+        uint256 ln = doLn((((reserveBalance + reserveAmount) * 1e18)) / reserveBalance);
+        learnMagic = k * ln;
     }
 
 }

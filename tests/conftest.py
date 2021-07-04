@@ -21,6 +21,13 @@ def isolate_func(fn_isolation):
 
 
 @pytest.fixture(scope="function", autouse=True)
+def token(deployer):
+    token = BasicERC20.deploy("Test", "TT", {"from": deployer})
+    token.mint(1000000e18)
+    yield token
+
+
+@pytest.fixture(scope="function")
 def contracts(deployer, token, kernelTreasury):
     learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
     token.approve(learning_curve, 1e18, {"from": deployer})
@@ -34,11 +41,27 @@ def contracts(deployer, token, kernelTreasury):
         learning_curve
 
 
-@pytest.fixture(scope="function", autouse=True)
-def token(deployer):
-    token = BasicERC20.deploy("Test", "TT", {"from": deployer})
-    token.mint(1000000e18)
-    yield token
+@pytest.fixture(scope="function")
+def contracts_with_courses(contracts, steward):
+    kernel, learning_curve = contracts
+    for n in range(5):
+        tx = kernel.createCourse(
+        constants.FEE,
+        constants.CHECKPOINTS,
+        constants.CHECKPOINT_BLOCK_SPACING,
+        {"from": steward}
+        )
+    yield kernel, learning_curve
+
+
+@pytest.fixture(scope="function")
+def contracts_with_learners(contracts_with_courses, learners, token, deployer):
+    kernel, learning_curve = contracts_with_courses
+    for n, learner in enumerate(learners):
+        token.transfer(learner, constants.FEE, {"from": deployer})
+        token.approve(kernel, constants.FEE, {"from": learner})
+        kernel.register(0, {"from": learner})
+    yield kernel, learning_curve
 
 
 @pytest.fixture
@@ -52,8 +75,13 @@ def steward(accounts):
 
 
 @pytest.fixture
+def hackerman(accounts):
+    yield accounts[9]
+
+
+@pytest.fixture
 def learners(accounts):
-    yield accounts[2:10]
+    yield accounts[2:8]
 
 
 @pytest.fixture

@@ -13,7 +13,6 @@ def test_full_mint(
         keeper,
         dai,
         ydai,
-        dai_whale,
         gen_lev_strat
 ):
     kernel, learning_curve = contracts
@@ -36,7 +35,7 @@ def test_full_mint(
         dai.transfer(
             learner,
             constants.FEE,
-            {"from": dai_whale}
+            {"from": deployer}
         )
         dai.approve(kernel, constants.FEE, {"from": learner})
         before_bal = dai.balanceOf(kernel)
@@ -49,13 +48,12 @@ def test_full_mint(
     assert kernel.getCurrentBatchTotal() == constants.FEE * len(learners)
     assert dai.balanceOf(kernel) == constants.FEE * len(learners)
     tx = kernel.batchDeposit({"from": kernelTreasury})
+    brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 5)
+    gen_lev_strat.harvest({"from": keeper})
     assert dai.balanceOf(kernel) == 0
     assert kernel.getCurrentBatchId() == 1
     assert ydai.balanceOf(kernel) > 0
-    brownie.chain.mine(100)
-    gen_lev_strat.harvest({"from": keeper})
-
-    assert kernel.verify(learners[7], 0, {"from": steward}) == constants.CHECKPOINTS
+    assert kernel.verify(learners[0], 0, {"from": steward}) == constants.CHECKPOINTS
     print("----- MINT -----")
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
@@ -70,12 +68,15 @@ def test_full_mint(
     print("----- BURN -----")
     for learner in reversed(learners):
         print(learning_curve.getBurnableForReserveAmount(constants.FEE))
-        print("User " + str(n) + " balance before: " + str(learning_curve.balanceOf(learner)))
+        lc_balance_before = learning_curve.balanceOf(learner)
+        print("User " + str(n) + " balance before: " + str(lc_balance_before))
         learning_curve.approve(
             learning_curve,
             learning_curve.getBurnableForReserveAmount(constants.FEE),
             {"from": learner})
         tx = learning_curve.burn(constants.FEE, {"from": learner})
+        assert learning_curve.balanceOf(learner) < lc_balance_before
+        assert dai.balanceOf(learner) == constants.FEE
         print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(dai.balanceOf(learner)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
@@ -93,7 +94,6 @@ def test_full_redeem(
         keeper,
         dai,
         ydai,
-        dai_whale,
         gen_lev_strat
 ):
     kernel, learning_curve = contracts
@@ -116,7 +116,7 @@ def test_full_redeem(
         dai.transfer(
             learner,
             constants.FEE,
-            {"from": dai_whale}
+            {"from": deployer}
         )
         dai.approve(kernel, constants.FEE, {"from": learner})
         before_bal = dai.balanceOf(kernel)
@@ -132,10 +132,11 @@ def test_full_redeem(
     assert dai.balanceOf(kernel) == 0
     assert kernel.getCurrentBatchId() == 1
     assert ydai.balanceOf(kernel) > 0
-    brownie.chain.mine(100)
+    brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 2)
     gen_lev_strat.harvest({"from": keeper})
+    brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 3)
 
-    assert kernel.verify(learners[7], 0, {"from": steward}) == constants.CHECKPOINTS
+    assert kernel.verify(learners[0], 0, {"from": steward}) == constants.CHECKPOINTS
     print("----- REDEEM -----")
     for n, learner in enumerate(learners):
         tx = kernel.redeem(0, {"from": learner})
