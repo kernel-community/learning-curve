@@ -11,6 +11,8 @@ This repository uses brownie for testing.
 * [python3](https://www.python.org/downloads/release/python-368/) version 3.6 or greater, python3-dev
 * [brownie](https://github.com/iamdefinitelyahuman/brownie) - tested with version [1.14.6](https://github.com/eth-brownie/brownie/releases/tag/v1.14.6)
 * [ganache-cli](https://github.com/trufflesuite/ganache-cli) - tested with version [6.12.2](https://github.com/trufflesuite/ganache-cli/releases/tag/v6.12.2)
+* [numpy](https://pypi.org/project/numpy/) - used for testing purposes
+
 
 To run the non-mainnet test suite (no yield functionality)
 
