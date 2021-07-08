@@ -1,3 +1,4 @@
 /build
 /reports
 /.idea
+/.pytest_cache

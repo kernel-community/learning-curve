@@ -1,6 +1,6 @@
 import pytest
 import time
-import constants
+import constants_mainnet
 from brownie import (
     KernelFactory,
     LearningCurve,
@@ -34,7 +34,7 @@ def contracts(deployer, kernelTreasury, dai):
     yield KernelFactory.deploy(
         dai.address,
         learning_curve.address,
-        constants.VAULT,
+        constants_mainnet.VAULT,
         kernelTreasury.address,
         {"from": deployer}), \
         learning_curve
@@ -45,9 +45,9 @@ def contracts_with_courses(contracts, steward):
     kernel, learning_curve = contracts
     for n in range(5):
         tx = kernel.createCourse(
-        constants.FEE,
-        constants.CHECKPOINTS,
-        constants.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.FEE,
+        constants_mainnet.CHECKPOINTS,
+        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         {"from": steward}
         )
     yield kernel, learning_curve
@@ -56,8 +56,8 @@ def contracts_with_courses(contracts, steward):
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
     kernel, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
-        token.transfer(learner, constants.FEE, {"from": deployer})
-        token.approve(kernel, constants.FEE, {"from": learner})
+        token.transfer(learner, constants_mainnet.FEE, {"from": deployer})
+        token.approve(kernel, constants_mainnet.FEE, {"from": learner})
         kernel.register(0, {"from": learner})
     yield kernel, learning_curve
 

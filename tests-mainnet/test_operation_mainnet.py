@@ -1,7 +1,5 @@
 import brownie
-from brownie import Contract, chain, web3
-import pytest
-import constants
+import constants_mainnet
 
 
 def test_full_mint(
@@ -18,42 +16,42 @@ def test_full_mint(
     kernel, learning_curve = contracts
 
     tx = kernel.createCourse(
-        constants.FEE,
-        constants.CHECKPOINTS,
-        constants.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.FEE,
+        constants_mainnet.CHECKPOINTS,
+        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         {"from": steward}
     )
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
-    assert tx.events["CourseCreated"]["checkpoints"] == constants.CHECKPOINTS
-    assert tx.events["CourseCreated"]["fee"] == constants.FEE
-    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants.CHECKPOINT_BLOCK_SPACING
+    assert tx.events["CourseCreated"]["checkpoints"] == constants_mainnet.CHECKPOINTS
+    assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
+    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
     assert kernel.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
         dai.transfer(
             learner,
-            constants.FEE,
+            constants_mainnet.FEE,
             {"from": deployer}
         )
-        dai.approve(kernel, constants.FEE, {"from": learner})
+        dai.approve(kernel, constants_mainnet.FEE, {"from": learner})
         before_bal = dai.balanceOf(kernel)
         tx = kernel.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants.FEE == dai.balanceOf(kernel)
+        assert before_bal + constants_mainnet.FEE == dai.balanceOf(kernel)
 
-    assert kernel.getCurrentBatchTotal() == constants.FEE * len(learners)
-    assert dai.balanceOf(kernel) == constants.FEE * len(learners)
+    assert kernel.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
+    assert dai.balanceOf(kernel) == constants_mainnet.FEE * len(learners)
     tx = kernel.batchDeposit({"from": kernelTreasury})
-    brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 5)
+    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
     gen_lev_strat.harvest({"from": keeper})
     assert dai.balanceOf(kernel) == 0
     assert kernel.getCurrentBatchId() == 1
     assert ydai.balanceOf(kernel) > 0
-    assert kernel.verify(learners[0], 0, {"from": steward}) == constants.CHECKPOINTS
+    assert kernel.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
     print("----- MINT -----")
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
@@ -67,16 +65,16 @@ def test_full_mint(
     n = 0
     print("----- BURN -----")
     for learner in reversed(learners):
-        print(learning_curve.getBurnableForReserveAmount(constants.FEE))
+        print(learning_curve.getBurnableForReserveAmount(constants_mainnet.FEE))
         lc_balance_before = learning_curve.balanceOf(learner)
         print("User " + str(n) + " balance before: " + str(lc_balance_before))
         learning_curve.approve(
             learning_curve,
-            learning_curve.getBurnableForReserveAmount(constants.FEE),
+            learning_curve.getBurnableForReserveAmount(constants_mainnet.FEE),
             {"from": learner})
-        tx = learning_curve.burn(constants.FEE, {"from": learner})
+        tx = learning_curve.burn(constants_mainnet.FEE, {"from": learner})
         assert learning_curve.balanceOf(learner) < lc_balance_before
-        assert dai.balanceOf(learner) == constants.FEE
+        assert dai.balanceOf(learner) == constants_mainnet.FEE
         print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(dai.balanceOf(learner)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
@@ -99,44 +97,44 @@ def test_full_redeem(
     kernel, learning_curve = contracts
 
     tx = kernel.createCourse(
-        constants.FEE,
-        constants.CHECKPOINTS,
-        constants.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.FEE,
+        constants_mainnet.CHECKPOINTS,
+        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         {"from": steward}
     )
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
-    assert tx.events["CourseCreated"]["checkpoints"] == constants.CHECKPOINTS
-    assert tx.events["CourseCreated"]["fee"] == constants.FEE
-    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants.CHECKPOINT_BLOCK_SPACING
+    assert tx.events["CourseCreated"]["checkpoints"] == constants_mainnet.CHECKPOINTS
+    assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
+    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
     assert kernel.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
         dai.transfer(
             learner,
-            constants.FEE,
+            constants_mainnet.FEE,
             {"from": deployer}
         )
-        dai.approve(kernel, constants.FEE, {"from": learner})
+        dai.approve(kernel, constants_mainnet.FEE, {"from": learner})
         before_bal = dai.balanceOf(kernel)
         tx = kernel.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants.FEE == dai.balanceOf(kernel)
+        assert before_bal + constants_mainnet.FEE == dai.balanceOf(kernel)
 
-    assert kernel.getCurrentBatchTotal() == constants.FEE * len(learners)
-    assert dai.balanceOf(kernel) == constants.FEE * len(learners)
+    assert kernel.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
+    assert dai.balanceOf(kernel) == constants_mainnet.FEE * len(learners)
     tx = kernel.batchDeposit({"from": kernelTreasury})
     assert dai.balanceOf(kernel) == 0
     assert kernel.getCurrentBatchId() == 1
     assert ydai.balanceOf(kernel) > 0
-    brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 2)
+    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 2)
     gen_lev_strat.harvest({"from": keeper})
-    brownie.chain.mine(constants.CHECKPOINT_BLOCK_SPACING * 3)
+    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 3)
 
-    assert kernel.verify(learners[0], 0, {"from": steward}) == constants.CHECKPOINTS
+    assert kernel.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
     print("----- REDEEM -----")
     for n, learner in enumerate(learners):
         tx = kernel.redeem(0, {"from": learner})

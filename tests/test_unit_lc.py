@@ -1,8 +1,7 @@
 import brownie
-from brownie import Contract, chain, web3, LearningCurve, KernelFactory
-import pytest
-import constants
-from numpy import log as ln
+from brownie import LearningCurve
+import constants_unit
+from math import log as ln
 
 
 def test_init(token, deployer):
@@ -31,24 +30,25 @@ def test_mint(learners, token, deployer, contracts):
     for n, learner in enumerate(learners):
         token.transfer(
             learner,
-            constants.MINT_AMOUNT,
+            constants_unit.MINT_AMOUNT,
             {"from": deployer}
         )
-        token.approve(learning_curve, constants.MINT_AMOUNT, {"from": learner})
+        token.approve(learning_curve, constants_unit.MINT_AMOUNT, {"from": learner})
         before_bal = token.balanceOf(learning_curve)
         learner_before_dai_bal = token.balanceOf(learner)
         learner_before_lc_bal = learning_curve.balanceOf(learner)
-        numerator = float((learning_curve.reserveBalance() / 1e18 + constants.MINT_AMOUNT / 1e18))
-        predicted_mint = float(constants.K * ln(numerator / (learning_curve.reserveBalance()/1e18))) * 1e18
+        numerator = float((learning_curve.reserveBalance() / 1e18 + constants_unit.MINT_AMOUNT / 1e18))
+        predicted_mint = float(constants_unit.K * ln(numerator / (learning_curve.reserveBalance() / 1e18))) * 1e18
         lc_supply_before = learning_curve.totalSupply()
-        assert abs(predicted_mint - learning_curve.getMintableForReserveAmount(constants.MINT_AMOUNT)) < constants.ACCURACY
+        assert abs(predicted_mint - learning_curve.getMintableForReserveAmount(
+            constants_unit.MINT_AMOUNT)) < constants_unit.ACCURACY
 
-        learning_curve.mint(constants.MINT_AMOUNT, {"from": learner})
+        learning_curve.mint(constants_unit.MINT_AMOUNT, {"from": learner})
 
-        assert abs(learner_before_lc_bal + predicted_mint - learning_curve.balanceOf(learner)) < constants.ACCURACY
-        assert learner_before_dai_bal - constants.MINT_AMOUNT == token.balanceOf(learner)
-        assert before_bal + constants.MINT_AMOUNT == token.balanceOf(learning_curve) == learning_curve.reserveBalance()
-        assert abs(learning_curve.totalSupply() - (predicted_mint + lc_supply_before)) < constants.ACCURACY
+        assert abs(learner_before_lc_bal + predicted_mint - learning_curve.balanceOf(learner)) < constants_unit.ACCURACY
+        assert learner_before_dai_bal - constants_unit.MINT_AMOUNT == token.balanceOf(learner)
+        assert before_bal + constants_unit.MINT_AMOUNT == token.balanceOf(learning_curve) == learning_curve.reserveBalance()
+        assert abs(learning_curve.totalSupply() - (predicted_mint + lc_supply_before)) < constants_unit.ACCURACY
 
 
 def test_burn(learners, token, deployer, contracts):
@@ -56,11 +56,11 @@ def test_burn(learners, token, deployer, contracts):
     for learner in learners:
         token.transfer(
             learner,
-            constants.MINT_AMOUNT,
+            constants_unit.MINT_AMOUNT,
             {"from": deployer}
         )
-        token.approve(learning_curve, constants.MINT_AMOUNT, {"from": learner})
-        learning_curve.mint(constants.MINT_AMOUNT, {"from": learner})
+        token.approve(learning_curve, constants_unit.MINT_AMOUNT, {"from": learner})
+        learning_curve.mint(constants_unit.MINT_AMOUNT, {"from": learner})
 
     n = 0
     for learner in reversed(learners):
@@ -68,12 +68,13 @@ def test_burn(learners, token, deployer, contracts):
         learner_before_dai_bal = token.balanceOf(learner)
         learner_before_lc_bal = learning_curve.balanceOf(learner)
         numerator = float((learning_curve.reserveBalance() / 1e18))
-        predicted_burn = float(constants.K * ln(numerator /
-                                    (learning_curve.reserveBalance()/1e18 - constants.MINT_AMOUNT/1e18))) * 1e18
+        predicted_burn = float(constants_unit.K * ln(numerator /
+                                                     (learning_curve.reserveBalance() / 1e18 - constants_unit.MINT_AMOUNT / 1e18))) * 1e18
         lc_supply_before = learning_curve.totalSupply()
-        assert abs(predicted_burn - learning_curve.getBurnableForReserveAmount(constants.MINT_AMOUNT)) < constants.ACCURACY
-        learning_curve.burn(constants.MINT_AMOUNT, {"from": learner})
-        assert abs(learner_before_lc_bal - predicted_burn + learning_curve.balanceOf(learner)) < constants.ACCURACY
-        assert learner_before_dai_bal + constants.MINT_AMOUNT == token.balanceOf(learner)
-        assert before_bal - constants.MINT_AMOUNT == token.balanceOf(learning_curve) == learning_curve.reserveBalance()
-        assert abs(learning_curve.totalSupply() + (predicted_burn - lc_supply_before)) < constants.ACCURACY
+        assert abs(predicted_burn - learning_curve.getBurnableForReserveAmount(
+            constants_unit.MINT_AMOUNT)) < constants_unit.ACCURACY
+        learning_curve.burn(constants_unit.MINT_AMOUNT, {"from": learner})
+        assert abs(learner_before_lc_bal - predicted_burn + learning_curve.balanceOf(learner)) < constants_unit.ACCURACY
+        assert learner_before_dai_bal + constants_unit.MINT_AMOUNT == token.balanceOf(learner)
+        assert before_bal - constants_unit.MINT_AMOUNT == token.balanceOf(learning_curve) == learning_curve.reserveBalance()
+        assert abs(learning_curve.totalSupply() + (predicted_burn - lc_supply_before)) < constants_unit.ACCURACY
