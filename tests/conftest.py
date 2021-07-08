@@ -1,15 +1,9 @@
 import pytest
-import time
-import constants
+import constants_unit
 from brownie import (
     KernelFactory,
     LearningCurve,
     BasicERC20,
-    accounts,
-    web3,
-    Wei,
-    chain,
-    Contract,
 )
 
 
@@ -35,7 +29,7 @@ def contracts(deployer, token, kernelTreasury):
     yield KernelFactory.deploy(
         token.address,
         learning_curve.address,
-        constants.VAULT,
+        constants_unit.VAULT,
         kernelTreasury.address,
         {"from": deployer}), \
         learning_curve
@@ -46,9 +40,9 @@ def contracts_with_courses(contracts, steward):
     kernel, learning_curve = contracts
     for n in range(5):
         tx = kernel.createCourse(
-        constants.FEE,
-        constants.CHECKPOINTS,
-        constants.CHECKPOINT_BLOCK_SPACING,
+        constants_unit.FEE,
+        constants_unit.CHECKPOINTS,
+        constants_unit.CHECKPOINT_BLOCK_SPACING,
         {"from": steward}
         )
     yield kernel, learning_curve
@@ -58,8 +52,8 @@ def contracts_with_courses(contracts, steward):
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
     kernel, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
-        token.transfer(learner, constants.FEE, {"from": deployer})
-        token.approve(kernel, constants.FEE, {"from": learner})
+        token.transfer(learner, constants_unit.FEE, {"from": deployer})
+        token.approve(kernel, constants_unit.FEE, {"from": learner})
         kernel.register(0, {"from": learner})
     yield kernel, learning_curve
 

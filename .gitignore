@@ -7,3 +7,4 @@ artifacts
 /build
 /reports
 /.idea
+/.pytest_cache
