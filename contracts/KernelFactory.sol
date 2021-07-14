@@ -64,7 +64,7 @@ contract KernelFactory {
     // the yearn vault used by the contract, yDAI
     I_Vault public vault;
 
-    // tracker for the courseId, current represents the id of the next batch
+    // tracker for the courseId, current represents the id of the next course
     Counters.Counter private courseIdTracker;
     // interface for the learning curve
     I_LearningCurve public learningCurve;

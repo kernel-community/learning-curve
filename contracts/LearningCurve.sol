@@ -103,7 +103,7 @@ contract LearningCurve is ERC20 {
 
     /**
     * @notice calculates the amount of LEARN to burn given the amount of DAI requested.
-    * @param  reserveAmount the amount of DAI to burn
+    * @param  reserveAmount the amount of DAI to receive
     */
     function getBurnableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
         uint256 ln = doLn((reserveBalance * 1e18) / (reserveBalance - reserveAmount));
@@ -112,7 +112,7 @@ contract LearningCurve is ERC20 {
 
     /**
     * @notice calculates the amount of LEARN to mint given the amount of DAI requested.
-    * @param  reserveAmount the amount of DAI to mint
+    * @param  reserveAmount the amount of DAI to lock
     */
     function getMintableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
         uint256 ln = doLn((((reserveBalance + reserveAmount) * 1e18)) / reserveBalance);
