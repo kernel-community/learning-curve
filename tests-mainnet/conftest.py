@@ -26,7 +26,7 @@ def deployer():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def contracts(deployer, kernelTreasury, dai):
+def contracts(deployer, dai):
     learning_curve = LearningCurve.deploy(dai.address, {"from": deployer})
     dai.transfer(deployer, 1e18, {"from": deployer})
     dai.approve(learning_curve, 1e18, {"from": deployer})
@@ -48,7 +48,7 @@ def contracts_with_courses(contracts, steward):
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         constants_mainnet.URL,
-        constants_mainnet.TREASURY_ADDRESS,
+        constants_mainnet.CREATOR,
         {"from": steward}
         )
     yield kernel, learning_curve

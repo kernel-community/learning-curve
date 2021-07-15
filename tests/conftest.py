@@ -22,7 +22,7 @@ def token(deployer):
 
 
 @pytest.fixture(scope="function")
-def contracts(deployer, token, kernelTreasury):
+def contracts(deployer, token):
     learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
     token.approve(learning_curve, 1e18, {"from": deployer})
     learning_curve.initialise({"from": deployer})
@@ -43,7 +43,7 @@ def contracts_with_courses(contracts, steward):
         constants_unit.CHECKPOINTS,
         constants_unit.CHECKPOINT_BLOCK_SPACING,
         constants_unit.URL,
-        constants_unit.TREASURY_ADDRESS,
+        constants_unit.CREATOR,
         {"from": steward}
         )
     yield kernel, learning_curve

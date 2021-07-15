@@ -10,7 +10,7 @@ def test_full(deployer, learners, steward, contracts, token):
         constants_unit.CHECKPOINTS,
         constants_unit.CHECKPOINT_BLOCK_SPACING,
         constants_unit.URL,
-        constants_unit.TREASURY_ADDRESS,
+        constants_unit.CREATOR,
         {"from": steward}
     )
 
@@ -20,7 +20,7 @@ def test_full(deployer, learners, steward, contracts, token):
     assert tx.events["CourseCreated"]["fee"] == constants_unit.FEE
     assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_unit.CHECKPOINT_BLOCK_SPACING
     assert tx.events["CourseCreated"]["url"] == constants_unit.URL
-    assert tx.events["CourseCreated"]["treasuryAddress"] == constants_unit.TREASURY_ADDRESS
+    assert tx.events["CourseCreated"]["creator"] == constants_unit.CREATOR
 
     for n, learner in enumerate(learners):
         token.transfer(

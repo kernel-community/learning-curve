@@ -20,7 +20,7 @@ def test_full_mint(
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         constants_mainnet.URL,
-        constants_mainnet.TREASURY_ADDRESS,
+        constants_mainnet.CREATOR,
         {"from": steward}
     )
 
@@ -30,7 +30,7 @@ def test_full_mint(
     assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
     assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
     assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
-    assert tx.events["CourseCreated"]["treasuryAddress"] == constants_mainnet.TREASURY_ADDRESS
+    assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
     assert kernel.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
@@ -104,7 +104,7 @@ def test_full_redeem(
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         constants_mainnet.URL,
-        constants_mainnet.TREASURY_ADDRESS,
+        constants_mainnet.CREATOR,
         {"from": steward}
     )
 
@@ -146,7 +146,7 @@ def test_full_redeem(
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("Learner " + str(n) + " dai balance: " + str(dai.balanceOf(learner)))
         print("YDAI Balance: " + str(ydai.balanceOf(kernel)))
-        print("redeemable DAI Balance of KernelTreasury: " +
+        print("redeemable DAI Balance of Creator: " +
               str(kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}))
               )
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))

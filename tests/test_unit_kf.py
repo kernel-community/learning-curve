@@ -11,7 +11,7 @@ def test_create_courses(contracts, steward):
             constants_unit.CHECKPOINTS,
             constants_unit.CHECKPOINT_BLOCK_SPACING,
             constants_unit.URL,
-            constants_unit.TREASURY_ADDRESS,
+            constants_unit.CREATOR,
             {"from": steward}
         )
 
@@ -21,7 +21,7 @@ def test_create_courses(contracts, steward):
         assert tx.events["CourseCreated"]["fee"] == constants_unit.FEE
         assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_unit.CHECKPOINT_BLOCK_SPACING
         assert tx.events["CourseCreated"]["url"] == constants_unit.URL
-        assert tx.events["CourseCreated"]["treasuryAddress"] == constants_unit.TREASURY_ADDRESS
+        assert tx.events["CourseCreated"]["creator"] == constants_unit.CREATOR
 
 
 def test_create_malicious_courses(contracts, hackerman):
@@ -32,7 +32,7 @@ def test_create_malicious_courses(contracts, hackerman):
             constants_unit.CHECKPOINTS,
             constants_unit.CHECKPOINT_BLOCK_SPACING,
             constants_unit.URL,
-            constants_unit.TREASURY_ADDRESS,
+            constants_unit.CREATOR,
             {"from": hackerman}
         )
     with brownie.reverts("createCourse: checkpoint must be greater than 0"):
@@ -41,7 +41,7 @@ def test_create_malicious_courses(contracts, hackerman):
             0,
             constants_unit.CHECKPOINT_BLOCK_SPACING,
             constants_unit.URL,
-            constants_unit.TREASURY_ADDRESS,
+            constants_unit.CREATOR,
             {"from": hackerman}
         )
     with brownie.reverts("createCourse: checkpointBlockSpacing must be greater than 0"):
@@ -50,7 +50,7 @@ def test_create_malicious_courses(contracts, hackerman):
             constants_unit.CHECKPOINTS,
             0,
             constants_unit.URL,
-            constants_unit.TREASURY_ADDRESS,
+            constants_unit.CREATOR,
             {"from": hackerman}
         )
 
@@ -232,7 +232,7 @@ def test_verify_malicious(contracts_with_learners, hackerman, learners):
         kernel.verify(hackerman, 0, {"from": hackerman})
 
 
-def test_mint_lc_not_initialised(token, deployer, kernelTreasury, steward, learners):
+def test_mint_lc_not_initialised(token, deployer, steward, learners):
     learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
     kernel = KernelFactory.deploy(
         token.address,
@@ -245,7 +245,7 @@ def test_mint_lc_not_initialised(token, deployer, kernelTreasury, steward, learn
         constants_unit.CHECKPOINTS,
         constants_unit.CHECKPOINT_BLOCK_SPACING,
         constants_unit.URL,
-        constants_unit.TREASURY_ADDRESS,
+        constants_unit.CREATOR,
         {"from": steward}
     )
     for n, learner in enumerate(learners):

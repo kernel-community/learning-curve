@@ -39,7 +39,7 @@ contract KernelFactory {
         uint256 fee;                    // the fee for entering the course
         uint256 checkpointBlockSpacing; // the block spacing between checkpoints
         string url;                     // url containing course data
-        address treasuryAddress;        // address to receive any yield from a redeem call
+        address creator;        // address to receive any yield from a redeem call
     }
 
     struct Learner {
@@ -80,7 +80,7 @@ contract KernelFactory {
         uint256 fee,
         uint256 checkpointBlockSpacing,
         string url,
-        address treasuryAddress
+        address creator
     );
 
     event LearnerRegistered(
@@ -129,20 +129,20 @@ contract KernelFactory {
      * @param  _checkpoints            number of checkpoints on the course
      * @param  _checkpointBlockSpacing block spacing between subsequent checkpoints
      * @param  _url                    url leading to course details
-     * @param  _treasuryAddress        the address that excess yield will be sent to on a redeem
+     * @param  _creator        the address that excess yield will be sent to on a redeem
      */
     function createCourse(
         uint256 _fee,
         uint256 _checkpoints,
         uint256 _checkpointBlockSpacing,
         string calldata _url,
-        address _treasuryAddress
+        address _creator
     ) external {
         require(_fee > 0, "createCourse: fee must be greater than 0");
         require(_checkpointBlockSpacing > 0,
             "createCourse: checkpointBlockSpacing must be greater than 0");
         require(_checkpoints > 0, "createCourse: checkpoint must be greater than 0");
-        require(_treasuryAddress != address(0), "createCourse: treasuryAddress cannot be 0 address");
+        require(_creator != address(0), "createCourse: creator cannot be 0 address");
         uint256 courseId_ = courseIdTracker.current();
         courseIdTracker.increment();
         courses[courseId_] = Course(
@@ -150,7 +150,7 @@ contract KernelFactory {
                                   _fee,
                                   _checkpointBlockSpacing,
                                   _url,
-                                  _treasuryAddress
+                                  _creator
                                  );
         emit CourseCreated(
                             courseId_,
@@ -158,7 +158,7 @@ contract KernelFactory {
                             _fee,
                             _checkpointBlockSpacing,
                             _url,
-                            _treasuryAddress
+                            _creator
         );
     }
 
@@ -272,7 +272,7 @@ contract KernelFactory {
              uint256 fee_ = (latestCheckpoint - checkpointReached)
                                            * (courses[_courseId].fee / courses[_courseId].checkpoints);
              if (fee_ < shares){
-                 yieldRewards[courses[_courseId].treasuryAddress] += shares - fee_;
+                 yieldRewards[courses[_courseId].creator] += shares - fee_;
                  stable.safeTransfer(msg.sender, fee_);
                  emit FeeRedeemed(_courseId, msg.sender, fee_);
              } else {
@@ -314,7 +314,7 @@ contract KernelFactory {
     /**
      * @notice Gets the amount of dai that an address is eligible, addresses become eligible if
      *         they are the designated reward receiver for a specific course and a learner on that
-     *         course decided to redeem, meaning yield was reserved for the rewward receiver
+     *         course decided to redeem, meaning yield was reserved for the reward receiver
      */
     function withdrawYieldRewards() external{
         uint256 withdrawableReward = getYieldRewards(msg.sender);
