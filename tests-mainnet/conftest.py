@@ -35,7 +35,6 @@ def contracts(deployer, kernelTreasury, dai):
         dai.address,
         learning_curve.address,
         constants_mainnet.VAULT,
-        kernelTreasury.address,
         {"from": deployer}), \
         learning_curve
 

@@ -238,7 +238,6 @@ def test_mint_lc_not_initialised(token, deployer, kernelTreasury, steward, learn
         token.address,
         learning_curve.address,
         constants_unit.VAULT,
-        kernelTreasury.address,
         {"from": deployer}
     )
     kernel.createCourse(

@@ -72,8 +72,6 @@ contract KernelFactory {
     Counters.Counter private courseIdTracker;
     // interface for the learning curve
     I_LearningCurve public learningCurve;
-    // kernel treasury address
-    address public kernelTreasury;
 
 
     event CourseCreated(
@@ -118,13 +116,11 @@ contract KernelFactory {
     constructor(
         address _stable,
         address _learningCurve,
-        address _vault,
-        address _kernelTreasury
+        address _vault
     ) {
         stable = IERC20(_stable);
         learningCurve = I_LearningCurve(_learningCurve);
         vault = I_Vault(_vault);
-        kernelTreasury = _kernelTreasury;
     }
 
     /**
@@ -255,11 +251,11 @@ contract KernelFactory {
      *                   the course is deployed) must be returned and sends it back
      *                   to the learner.
      *
-     *                   Whatever yield they earned is sent to the Kernel Treasury.
+     *                   Whatever yield they earned is sent to the course configured address.
      *
      *                   If the learner has not completed the course, it checks that ~6months
      *                   have elapsed since blockRegistered, at which point the full `fee`
-     *                   can be returned and the yield sent to the Kernel Treasury.
+     *                   can be returned and the yield sent to the course configured address.
      *
      * @param  _courseId course id to redeem the fee from
      */

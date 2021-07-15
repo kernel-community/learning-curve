@@ -178,7 +178,7 @@ def test_redeem_diff_checkpoints(
                    constants_mainnet.ACCURACY_Y
             assert token.balanceOf(learning_curve) == 1e18
             assert ydai.balanceOf(learning_curve) == 0
-            print(ydai.balanceOf(kernel), token.balanceOf(kernel))
+
     kt_redemption = kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury})
     kernel.withdrawYieldRewards({"from": kernelTreasury})
     assert kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}) == 0
