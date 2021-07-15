@@ -48,6 +48,8 @@ def contracts_with_courses(contracts, steward):
         constants_mainnet.FEE,
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.URL,
+        constants_mainnet.TREASURY_ADDRESS,
         {"from": steward}
         )
     yield kernel, learning_curve

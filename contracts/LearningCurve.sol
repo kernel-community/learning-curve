@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.4;
 
 import "./PRBMath.sol";
 import "./PRBMathUD60x18.sol";
@@ -23,6 +23,8 @@ contract LearningCurve is ERC20 {
     uint256 public reserveBalance;
     bool initialised;
 
+    event LearnMinted(address indexed learner, uint256 amountMinted, uint256 daiDeposited);
+    event LearnBurned(address indexed learner, uint256 amountBurned, uint256 daiReturned);
     constructor (address _reserve) ERC20("Learning Curve", "LEARN"){
         reserve = IERC20(_reserve);
     }
@@ -57,6 +59,7 @@ contract LearningCurve is ERC20 {
         uint256 learnMagic = k * ln;
         reserveBalance += _wad;
         _mint(msg.sender, learnMagic);
+        emit LearnMinted(msg.sender, learnMagic, _wad);
     }
 
     /**
@@ -75,6 +78,7 @@ contract LearningCurve is ERC20 {
         uint256 learnMagic = k * ln;
         reserveBalance += _wad;
         _mint(learner, learnMagic);
+        emit LearnMinted(learner, learnMagic, _wad);
     }
 
     /**
@@ -90,6 +94,7 @@ contract LearningCurve is ERC20 {
         _burn(msg.sender, learnMagic);
         reserveBalance -= _daiToReceive;
         reserve.safeTransfer(msg.sender, _daiToReceive);
+        emit LearnBurned(msg.sender, learnMagic, _daiToReceive);
     }
 
     /**
