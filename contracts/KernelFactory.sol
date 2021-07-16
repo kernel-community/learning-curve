@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.4;
 pragma abicoder v2;
 
 import "./LearningCurve.sol";
@@ -38,12 +38,14 @@ contract KernelFactory {
         uint256 checkpoints;            // number of checkpoints the course should have
         uint256 fee;                    // the fee for entering the course
         uint256 checkpointBlockSpacing; // the block spacing between checkpoints
+        string url;                     // url containing course data
+        address creator;        // address to receive any yield from a redeem call
     }
 
     struct Learner {
         uint256 blockRegistered;        // used to decide when a learner can claim their registration fee back
         uint256 yieldBatchId;           // the batch id for this learner's Yield bearing deposit
-        uint256 checkpointReached;      // what checkpoint the user has reached
+        uint256 checkpointReached;      // what checkpoint the learner has reached
     }
 
     // containing course data mapped by a courseId
@@ -55,28 +57,30 @@ contract KernelFactory {
     mapping(uint256 => uint256) batchTotal;
     // containing the total amount of yield token for a yield batch mapped by batchId
     mapping(uint256 => uint256) batchYieldTotal;
-    // containing the underlying amount a user deposited in a specific batchId
-    mapping(uint256 => mapping (address => uint256)) userDeposit;
+    // containing the underlying amount a learner deposited in a specific batchId
+    mapping(uint256 => mapping (address => uint256)) learnerDeposit;
     // tracker for the batchId, current represents the current batch
     Counters.Counter private batchIdTracker;
     // the stablecoin used by the contract, DAI
     IERC20 public stable;
     // the yearn vault used by the contract, yDAI
     I_Vault public vault;
+    // yield rewards for an eligible address
+    mapping(address => uint256) yieldRewards;
 
     // tracker for the courseId, current represents the id of the next course
     Counters.Counter private courseIdTracker;
     // interface for the learning curve
     I_LearningCurve public learningCurve;
-    // kernel treasury address
-    address public kernelTreasury;
 
 
     event CourseCreated(
         uint256 indexed courseId,
         uint256 checkpoints,
         uint256 fee,
-        uint256 checkpointBlockSpacing
+        uint256 checkpointBlockSpacing,
+        string url,
+        address creator
     );
 
     event LearnerRegistered(
@@ -104,17 +108,19 @@ contract KernelFactory {
         uint256 checkpointReached,
         address learner
     );
+    event YieldRewardRedeemed(
+        address redeemer,
+        uint256 yieldRewarded
+    );
 
     constructor(
         address _stable,
         address _learningCurve,
-        address _vault,
-        address _kernelTreasury
+        address _vault
     ) {
         stable = IERC20(_stable);
         learningCurve = I_LearningCurve(_learningCurve);
         vault = I_Vault(_vault);
-        kernelTreasury = _kernelTreasury;
     }
 
     /**
@@ -122,24 +128,38 @@ contract KernelFactory {
      * @param  _fee                    fee for a learner to register
      * @param  _checkpoints            number of checkpoints on the course
      * @param  _checkpointBlockSpacing block spacing between subsequent checkpoints
+     * @param  _url                    url leading to course details
+     * @param  _creator        the address that excess yield will be sent to on a redeem
      */
     function createCourse(
         uint256 _fee,
         uint256 _checkpoints,
-        uint256 _checkpointBlockSpacing
+        uint256 _checkpointBlockSpacing,
+        string calldata _url,
+        address _creator
     ) external {
         require(_fee > 0, "createCourse: fee must be greater than 0");
         require(_checkpointBlockSpacing > 0,
             "createCourse: checkpointBlockSpacing must be greater than 0");
         require(_checkpoints > 0, "createCourse: checkpoint must be greater than 0");
+        require(_creator != address(0), "createCourse: creator cannot be 0 address");
         uint256 courseId_ = courseIdTracker.current();
         courseIdTracker.increment();
         courses[courseId_] = Course(
                                   _checkpoints,
                                   _fee,
-                                  _checkpointBlockSpacing
+                                  _checkpointBlockSpacing,
+                                  _url,
+                                  _creator
                                  );
-        emit CourseCreated(courseId_, _checkpoints, _fee, _checkpointBlockSpacing);
+        emit CourseCreated(
+                            courseId_,
+                            _checkpoints,
+                            _fee,
+                            _checkpointBlockSpacing,
+                            _url,
+                            _creator
+        );
     }
 
     /**
@@ -175,7 +195,7 @@ contract KernelFactory {
          learnerData[_courseId][msg.sender].blockRegistered = block.number;
          learnerData[_courseId][msg.sender].yieldBatchId = batchId_;
          batchTotal[batchId_] += course.fee;
-         userDeposit[batchId_][msg.sender] += course.fee;
+         learnerDeposit[batchId_][msg.sender] += course.fee;
 
          emit LearnerRegistered(_courseId, msg.sender);
      }
@@ -192,7 +212,7 @@ contract KernelFactory {
      *
      * @param  learner   address of the learner to verify
      * @param  _courseId course id to verify for the learner
-     * @return           the checkpoint that the user has reached
+     * @return           the checkpoint that the learner has reached
      */
      function verify (address learner, uint256 _courseId) public view returns (uint256) {
          require(_courseId < courseIdTracker.current(), "verify: courseId does not exist");
@@ -231,25 +251,28 @@ contract KernelFactory {
      *                   the course is deployed) must be returned and sends it back
      *                   to the learner.
      *
-     *                   Whatever yield they earned is sent to the Kernel Treasury.
+     *                   Whatever yield they earned is sent to the course configured address.
      *
      *                   If the learner has not completed the course, it checks that ~6months
      *                   have elapsed since blockRegistered, at which point the full `fee`
-     *                   can be returned and the yield sent to the Kernel Treasury.
+     *                   can be returned and the yield sent to the course configured address.
      *
      * @param  _courseId course id to redeem the fee from
      */
      function redeem(uint256 _courseId) external {
          uint256 shares;
          uint256 learnerShares;
-         bool undeployed;
+         bool deployed;
          require(learnerData[_courseId][msg.sender].blockRegistered != 0, "redeem: not a learner on this course");
-         (learnerShares, undeployed) = getEligibleAmount(_courseId);
-         if (!undeployed){
+         uint256 checkpointReached = learnerData[_courseId][msg.sender].checkpointReached;
+         (learnerShares, deployed) = getEligibleAmount(_courseId);
+         uint256 latestCheckpoint = learnerData[_courseId][msg.sender].checkpointReached;
+         if (deployed){
              shares = vault.withdraw(learnerShares);
-             uint256 fee_ = courses[_courseId].fee;
+             uint256 fee_ = (latestCheckpoint - checkpointReached)
+                                           * (courses[_courseId].fee / courses[_courseId].checkpoints);
              if (fee_ < shares){
-                 stable.safeTransfer(kernelTreasury, shares - fee_);
+                 yieldRewards[courses[_courseId].creator] += shares - fee_;
                  stable.safeTransfer(msg.sender, fee_);
                  emit FeeRedeemed(_courseId, msg.sender, fee_);
              } else {
@@ -260,8 +283,6 @@ contract KernelFactory {
              stable.safeTransfer(msg.sender, learnerShares);
              emit FeeRedeemed(_courseId, msg.sender, learnerShares);
          }
-
-
      }
 
     /**
@@ -278,10 +299,10 @@ contract KernelFactory {
      */
     function mint(uint256 _courseId) external {
         uint256 shares;
-        bool undeployed;
+        bool deployed;
         require(learnerData[_courseId][msg.sender].blockRegistered != 0, "mint: not a learner on this course");
-        (shares, undeployed) = getEligibleAmount(_courseId);
-        if (!undeployed){
+        (shares, deployed) = getEligibleAmount(_courseId);
+        if (deployed){
             shares = vault.withdraw(shares);
         }
         stable.approve(address(learningCurve), shares);
@@ -291,15 +312,27 @@ contract KernelFactory {
      }
 
     /**
-     * @notice                gets the amount of funds that a user is eligible for at this timestamp
-     * @param  _courseId      course id to mint LEARN from
-     * @return eligibleShares the number of shares the user can withdraw
-     *                        (if bool undeployed is true will return dai amount, if it is false it will
-     *                        return the yDai amount)
-     * @return undeployed     if the funds to be redeemed were deployed to yearn
+     * @notice Gets the amount of dai that an address is eligible, addresses become eligible if
+     *         they are the designated reward receiver for a specific course and a learner on that
+     *         course decided to redeem, meaning yield was reserved for the reward receiver
      */
-    function getEligibleAmount(uint256 _courseId) internal returns (uint256 eligibleShares, bool undeployed){
-        uint256 fee = userDeposit[_courseId][msg.sender];
+    function withdrawYieldRewards() external{
+        uint256 withdrawableReward = getYieldRewards(msg.sender);
+        yieldRewards[msg.sender] = 0;
+        stable.safeTransfer(msg.sender, withdrawableReward);
+        emit YieldRewardRedeemed(msg.sender, withdrawableReward);
+    }
+
+    /**
+     * @notice                gets the amount of funds that a learner is eligible for at this timestamp
+     * @param  _courseId      course id to mint LEARN from
+     * @return eligibleShares the number of shares the learner can withdraw
+     *                        (if bool deployed is true will return yDai amount, if it is false it will
+     *                        return the Dai amount)
+     * @return deployed       whether the funds to be redeemed were deployed to yearn
+     */
+    function getEligibleAmount(uint256 _courseId) internal returns (uint256 eligibleShares, bool deployed){
+        uint256 fee = learnerDeposit[_courseId][msg.sender];
         require(fee > 0, "no fee to redeem");
         uint256 checkpointReached = verify(msg.sender, _courseId);
         require(checkpointReached > learnerData[_courseId][msg.sender].checkpointReached,
@@ -317,13 +350,14 @@ contract KernelFactory {
         }
         uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
         if (batchId_ == batchIdTracker.current()){
-            undeployed = true;
+            deployed = false;
             eligibleShares = eligibleAmount;
         } else {
             uint256 temp =  (eligibleAmount * 1e18) / batchTotal[batchId_];
+            deployed = true;
             eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
         }
-        userDeposit[_courseId][msg.sender] -= eligibleAmount;
+        learnerDeposit[_courseId][msg.sender] -= eligibleAmount;
     }
 
     function getCurrentBatchTotal() external view returns(uint256){
@@ -343,7 +377,7 @@ contract KernelFactory {
     }
 
     /// @dev rough calculation used for frontend work
-    function getUserCourseEligibleFunds(address learner, uint256 _courseId) external view returns (uint256){
+    function getLearnerCourseEligibleFunds(address learner, uint256 _courseId) external view returns (uint256){
         uint256 checkPointReached = verify(learner, _courseId);
         uint256 checkPointRedeemed = learnerData[_courseId][learner].checkpointReached;
         if (checkPointReached <= checkPointRedeemed){
@@ -360,8 +394,8 @@ contract KernelFactory {
         }
     }
 
-        /// @dev rough calculation used for frontend work
-    function getUserCourseFundsRemaining(address learner, uint256 _courseId) external view returns (uint256){
+    /// @dev rough calculation used for frontend work
+    function getLearnerCourseFundsRemaining(address learner, uint256 _courseId) external view returns (uint256){
         uint256 checkPointReached = verify(learner, _courseId);
         uint256 checkPointRedeemed = learnerData[_courseId][learner].checkpointReached;
         uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
@@ -373,5 +407,13 @@ contract KernelFactory {
             uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
             return eligibleShares * vault.pricePerShare() / 1e18;
         }
+    }
+
+    function getCourseUrl(uint256 _courseId) external view returns (string memory){
+        return courses[_courseId].url;
+    }
+
+    function getYieldRewards(address redeemer) public view returns (uint256){
+        return yieldRewards[redeemer];
     }
 }

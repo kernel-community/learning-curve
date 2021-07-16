@@ -19,6 +19,8 @@ def test_full_mint(
         constants_mainnet.FEE,
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.URL,
+        constants_mainnet.CREATOR,
         {"from": steward}
     )
 
@@ -27,6 +29,8 @@ def test_full_mint(
     assert tx.events["CourseCreated"]["checkpoints"] == constants_mainnet.CHECKPOINTS
     assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
     assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
+    assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
+    assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
     assert kernel.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
@@ -56,7 +60,7 @@ def test_full_mint(
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
-        print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
+        print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("YDAI Balance: " + str(ydai.balanceOf(kernel)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))
@@ -65,9 +69,8 @@ def test_full_mint(
     n = 0
     print("----- BURN -----")
     for learner in reversed(learners):
-        print(learning_curve.getBurnableForReserveAmount(constants_mainnet.FEE))
         lc_balance_before = learning_curve.balanceOf(learner)
-        print("User " + str(n) + " balance before: " + str(lc_balance_before))
+        print("Learner " + str(n) + " balance before: " + str(lc_balance_before))
         learning_curve.approve(
             learning_curve,
             learning_curve.getBurnableForReserveAmount(constants_mainnet.FEE),
@@ -75,7 +78,7 @@ def test_full_mint(
         tx = learning_curve.burn(constants_mainnet.FEE, {"from": learner})
         assert learning_curve.balanceOf(learner) < lc_balance_before
         assert dai.balanceOf(learner) == constants_mainnet.FEE
-        print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
+        print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(dai.balanceOf(learner)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))
@@ -100,6 +103,8 @@ def test_full_redeem(
         constants_mainnet.FEE,
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.URL,
+        constants_mainnet.CREATOR,
         {"from": steward}
     )
 
@@ -138,10 +143,12 @@ def test_full_redeem(
     print("----- REDEEM -----")
     for n, learner in enumerate(learners):
         tx = kernel.redeem(0, {"from": learner})
-        print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
-        print("User " + str(n) + " dai balance: " + str(dai.balanceOf(learner)))
+        print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
+        print("Learner " + str(n) + " dai balance: " + str(dai.balanceOf(learner)))
         print("YDAI Balance: " + str(ydai.balanceOf(kernel)))
-        print("DAI Balance of KernelTreasury: " + str(dai.balanceOf(kernelTreasury)))
+        print("redeemable DAI Balance of Creator: " +
+              str(kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}))
+              )
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))
         print('\n')

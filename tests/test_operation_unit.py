@@ -9,6 +9,8 @@ def test_full(deployer, learners, steward, contracts, token):
         constants_unit.FEE,
         constants_unit.CHECKPOINTS,
         constants_unit.CHECKPOINT_BLOCK_SPACING,
+        constants_unit.URL,
+        constants_unit.CREATOR,
         {"from": steward}
     )
 
@@ -17,6 +19,8 @@ def test_full(deployer, learners, steward, contracts, token):
     assert tx.events["CourseCreated"]["checkpoints"] == constants_unit.CHECKPOINTS
     assert tx.events["CourseCreated"]["fee"] == constants_unit.FEE
     assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_unit.CHECKPOINT_BLOCK_SPACING
+    assert tx.events["CourseCreated"]["url"] == constants_unit.URL
+    assert tx.events["CourseCreated"]["creator"] == constants_unit.CREATOR
 
     for n, learner in enumerate(learners):
         token.transfer(
@@ -42,7 +46,7 @@ def test_full(deployer, learners, steward, contracts, token):
     for n, learner in enumerate(learners):
         tx = kernel.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
-        print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
+        print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI collateral: " + str(token.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))
         print('\n')
@@ -50,14 +54,13 @@ def test_full(deployer, learners, steward, contracts, token):
     
     for learner in reversed(learners):
 
-        print(learning_curve.getBurnableForReserveAmount(constants_unit.FEE))
-        print("User " + str(n) + " balance before: " + str(learning_curve.balanceOf(learner)))
+        print("Learner " + str(n) + " balance before: " + str(learning_curve.balanceOf(learner)))
         learning_curve.approve(
             learning_curve,
             learning_curve.getBurnableForReserveAmount(constants_unit.FEE),
             {"from": learner})
         tx = learning_curve.burn(constants_unit.FEE, {"from": learner})
-        print("User " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
+        print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(token.balanceOf(learner)))
         print("DAI collateral: " + str(token.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))
