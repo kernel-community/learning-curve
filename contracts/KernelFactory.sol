@@ -253,10 +253,6 @@ contract KernelFactory {
      *
      *                   Whatever yield they earned is sent to the course configured address.
      *
-     *                   If the learner has not completed the course, it checks that ~6months
-     *                   have elapsed since blockRegistered, at which point the full `fee`
-     *                   can be returned and the yield sent to the course configured address.
-     *
      * @param  _courseId course id to redeem the fee from
      */
      function redeem(uint256 _courseId) external {
