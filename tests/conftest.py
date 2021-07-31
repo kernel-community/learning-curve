@@ -17,7 +17,7 @@ def isolate_func(fn_isolation):
 @pytest.fixture(scope="function", autouse=True)
 def token(deployer):
     token = BasicERC20.deploy("Test", "TT", {"from": deployer})
-    token.mint(1000000e18)
+    token.mint(10000000000e18)
     yield token
 
 

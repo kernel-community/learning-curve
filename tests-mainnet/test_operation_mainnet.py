@@ -73,11 +73,11 @@ def test_full_mint(
         print("Learner " + str(n) + " balance before: " + str(lc_balance_before))
         learning_curve.approve(
             learning_curve,
-            learning_curve.getBurnableForReserveAmount(constants_mainnet.FEE),
+            lc_balance_before,
             {"from": learner})
-        tx = learning_curve.burn(constants_mainnet.FEE, {"from": learner})
+        tx = learning_curve.burn(lc_balance_before, {"from": learner})
         assert learning_curve.balanceOf(learner) < lc_balance_before
-        assert dai.balanceOf(learner) == constants_mainnet.FEE
+        assert dai.balanceOf(learner) - constants_mainnet.FEE < constants_mainnet.ACCURACY
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(dai.balanceOf(learner)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
