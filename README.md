@@ -3,7 +3,6 @@
 Smart contracts for free and continuous online learning environments, which nevertheless ensure that course designers are properly rewarded for their work.
 
 ## Testing and Development
-Note: Test suite is WIP, the current tests only do a full flow success test and does not currently go for full coverage or run scenarios.
 
 This repository uses brownie for testing.
 ### Dependencies
