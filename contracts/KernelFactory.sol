@@ -302,41 +302,32 @@ contract KernelFactory {
         uint256 latestCheckpoint = learnerData[_courseId][msg.sender].checkpointReached;
         if (deployed){
             shares = vault.withdraw(shares);
-            uint256 fee_ = (latestCheckpoint - checkpointReached)
-                            * (courses[_courseId].fee / courses[_courseId].checkpoints);
-            if (fee_ < shares){
-                 yieldRewards[courses[_courseId].creator] += shares - fee_;
-                 stable.approve(address(learningCurve), fee_);
-                 uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-                 learningCurve.mintForAddress(msg.sender, fee_);
-                 emit LearnMintedFromCourse(
-                         _courseId,
-                         msg.sender,
-                         fee_,
-                         learningCurve.balanceOf(msg.sender) - balanceBefore
-                 );
-            } else {
-                 stable.approve(address(learningCurve), shares);
-                 uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-                 learningCurve.mintForAddress(msg.sender, shares);
-                 emit LearnMintedFromCourse(
-                         _courseId,
-                         msg.sender,
-                         shares,
-                         learningCurve.balanceOf(msg.sender) - balanceBefore
-                 );
-            }
-        } else {
-                 stable.approve(address(learningCurve), shares);
-                 uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-                 learningCurve.mintForAddress(msg.sender, shares);
-                 emit LearnMintedFromCourse(
-                         _courseId,
-                         msg.sender,
-                         shares,
-                         learningCurve.balanceOf(msg.sender) - balanceBefore
-                 );
         }
+        uint256 fee_ = (latestCheckpoint - checkpointReached)
+                            * (courses[_courseId].fee / courses[_courseId].checkpoints);
+        if (fee_ < shares){
+            yieldRewards[courses[_courseId].creator] += shares - fee_;
+            stable.approve(address(learningCurve), fee_);
+            uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
+            learningCurve.mintForAddress(msg.sender, fee_);
+            emit LearnMintedFromCourse(
+                        _courseId,
+                        msg.sender,
+                        fee_,
+                         learningCurve.balanceOf(msg.sender) - balanceBefore
+            );
+        } else {
+            stable.approve(address(learningCurve), shares);
+            uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
+            learningCurve.mintForAddress(msg.sender, shares);
+            emit LearnMintedFromCourse(
+                         _courseId,
+                         msg.sender,
+                         shares,
+                         learningCurve.balanceOf(msg.sender) - balanceBefore
+            );
+        }
+
      }
 
     /**

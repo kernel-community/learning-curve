@@ -4,6 +4,53 @@ import constants_unit
 from math import log as ln
 
 
+def test_flash_behaviour(token, deployer, hackerman, contracts, learners):
+    _, learning_curve = contracts
+    token.transfer(
+        hackerman,
+        constants_unit.MALICIOUS_AMOUNT,
+        {"from": deployer}
+    )
+    token.approve(learning_curve, constants_unit.MALICIOUS_AMOUNT, {"from": hackerman})
+    learning_curve.mint(constants_unit.MALICIOUS_AMOUNT, {"from": hackerman})
+    token_bal_before = token.balanceOf(hackerman)
+    learn_bal_before = learning_curve.balanceOf(hackerman)
+    print("Token Balance after mint: " + str(token_bal_before))
+    print("LEARN balance after mint: " + str(learn_bal_before))
+
+    for learner in learners:
+        token.transfer(
+            learner,
+            constants_unit.MINT_AMOUNT,
+            {"from": deployer}
+        )
+        token.approve(learning_curve, constants_unit.MINT_AMOUNT, {"from": learner})
+        learning_curve.mint(constants_unit.MINT_AMOUNT, {"from": learner})
+    n = 0
+    for learner in learners:
+        lc_before_bal = token.balanceOf(learning_curve)
+        learner_before_dai_bal = token.balanceOf(learner)
+        learner_before_lc_bal = learning_curve.balanceOf(learner)
+        print("Learning curve balance before: " + str(learning_curve.totalSupply()))
+        print("Learning curve dai balance before: " + str(lc_before_bal))
+        print("Learner LEARN balance before: " + str(learner_before_lc_bal))
+        print("Learner Dai balance before: " + str(learner_before_dai_bal))
+        tx = learning_curve.burn(learning_curve.balanceOf(learner), {"from": learner})
+        print("Learning curve balance: " + str(learning_curve.totalSupply()))
+        print("Learning curve dai balance: " + str(lc_before_bal))
+        print("Learner LEARN balance: " + str(learner_before_lc_bal))
+        print("Learner Dai balance: " + str(learner_before_dai_bal))
+        print("Learner Token Diff: " + str(tx.events["LearnBurned"]["daiReturned"] - constants_unit.MINT_AMOUNT))
+        print("Learner LEARN Diff: " + str(tx.events["LearnBurned"]["amountBurned"] - learner_before_lc_bal))
+    tx = learning_curve.burn(learning_curve.balanceOf(hackerman), {"from": hackerman})
+    print("Token Balance after burn: " + str(token.balanceOf(hackerman)))
+    print("LEARN balance after burn: " + str(learning_curve.balanceOf(hackerman)))
+    print("Hackerman Token Diff: " + str(tx.events["LearnBurned"]["daiReturned"] - constants_unit.MALICIOUS_AMOUNT))
+    print("Hackerman LEARN Diff: " + str(learn_bal_before - tx.events["LearnBurned"]["amountBurned"]))
+    print("Final learning curve balance: " + str(learning_curve.totalSupply()))
+    print("Final learning curve dai balance: " + str(token.balanceOf(learning_curve)))
+
+
 def test_init(token, deployer):
     learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
     token.approve(learning_curve, 1e18, {"from": deployer})

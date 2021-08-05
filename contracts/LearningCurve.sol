@@ -89,8 +89,7 @@ contract LearningCurve is ERC20 {
           require(initialised, "!initialised");
 
           uint256 e = e_calc(_burnAmount);
-          uint256 learnMagic = (reserveBalance * 1e18) / e;
-          learnMagic = reserveBalance - learnMagic;
+          uint256 learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
           _burn(msg.sender, _burnAmount);
           reserveBalance -= learnMagic;
           reserve.safeTransfer(msg.sender, learnMagic);
