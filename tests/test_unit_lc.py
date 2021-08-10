@@ -27,7 +27,7 @@ def test_flash_behaviour(token, deployer, hackerman, contracts, learners):
         token.approve(learning_curve, constants_unit.MINT_AMOUNT, {"from": learner})
         learning_curve.mint(constants_unit.MINT_AMOUNT, {"from": learner})
     n = 0
-    for learner in learners:
+    for learner in reversed(learners):
         lc_before_bal = token.balanceOf(learning_curve)
         learner_before_dai_bal = token.balanceOf(learner)
         learner_before_lc_bal = learning_curve.balanceOf(learner)
