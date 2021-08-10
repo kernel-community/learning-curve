@@ -122,8 +122,7 @@ contract LearningCurve is ERC20 {
     */
     function getPredictedBurn(uint256 _burnAmount) external view returns (uint256 learnMagic){
           uint256 e = e_calc(_burnAmount);
-          learnMagic = (reserveBalance * 1e18) / e;
-          learnMagic = reserveBalance - learnMagic;
+          learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
     }
 
     /**
