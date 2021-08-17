@@ -60,7 +60,7 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
         assert ydai.balanceOf(kernel) - ydai_bal_before == tx.events["BatchDeposited"]["batchYieldAmount"]
 
 
-def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai):
+def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
     kernel, learning_curve = contracts_with_learners
     brownie.chain.mine(constants_mainnet.CHECKPOINTS * constants_mainnet.CHECKPOINT_BLOCK_SPACING)
     tx = kernel.batchDeposit({"from": keeper})
@@ -69,7 +69,7 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
     gen_lev_strat.harvest({"from": keeper})
 
     for n, learner in enumerate(learners):
-        dai_balance = kernel.getLearnerCourseEligibleFunds(learner, 0)
+        dai_balance = constants_mainnet.FEE
         mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
         lc_dai_balance = token.balanceOf(learning_curve)
         kf_dai_balance = token.balanceOf(kernel)
@@ -81,19 +81,21 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
         assert kernel.verify(learner, 0) == constants_mainnet.CHECKPOINTS
         assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
         assert abs(token.balanceOf(learning_curve) - lc_dai_balance - dai_balance) < constants_mainnet.ACCURACY_Y
-        assert abs(token.balanceOf(kernel) - kf_dai_balance) < constants_mainnet.ACCURACY
+        assert abs(token.balanceOf(kernel) - kernel.getYieldRewards(steward)) < constants_mainnet.ACCURACY
         assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(kernel) == 0
+    assert token.balanceOf(kernel) == kernel.getYieldRewards(steward)
     assert ydai.balanceOf(kernel) < 1000
 
-def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai):
+
+def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
     kernel, learning_curve = contracts_with_learners
     tx = kernel.batchDeposit({"from": keeper})
     for m in range(constants_mainnet.CHECKPOINTS):
         brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
         gen_lev_strat.harvest({"from": keeper})
         for n, learner in enumerate(learners):
-            dai_balance = kernel.getLearnerCourseEligibleFunds(learner, 0)
+            dai_balance = constants_mainnet.FEE / constants_mainnet.CHECKPOINTS
+            redeemable_dai = kernel.getLearnerCourseEligibleFunds(learner, 0)
             mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
             lc_dai_balance = token.balanceOf(learning_curve)
             kf_ydai_balance = ydai.balanceOf(kernel)
@@ -108,14 +110,14 @@ def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper,
                    (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * (m + 2))
             assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
             assert abs(token.balanceOf(learning_curve) - (lc_dai_balance + dai_balance)) < constants_mainnet.ACCURACY_Y
-            assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (dai_balance*1e18)/ydai.pricePerShare())) < \
+            assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (redeemable_dai*1e18)/ydai.pricePerShare())) < \
                    constants_mainnet.ACCURACY_Y
             assert abs(learning_curve.balanceOf(learner) - (learner_lc_balance + mintable_balance)) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(kernel) == 0
+    assert token.balanceOf(kernel) == kernel.getYieldRewards(steward)
     assert ydai.balanceOf(kernel) < 1000
 
 
-def test_redeem(contracts_with_learners, learners, token, kernelTreasury, keeper, gen_lev_strat, ydai):
+def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_lev_strat, ydai):
     kernel, learning_curve = contracts_with_learners
     brownie.chain.mine(constants_mainnet.CHECKPOINTS * constants_mainnet.CHECKPOINT_BLOCK_SPACING)
     tx = kernel.batchDeposit({"from": keeper})
@@ -130,16 +132,16 @@ def test_redeem(contracts_with_learners, learners, token, kernelTreasury, keeper
         assert tx.events["FeeRedeemed"]["amount"] == constants_mainnet.FEE
         assert kernel.verify(learner, 0) == constants_mainnet.CHECKPOINTS
         assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
-        assert token.balanceOf(kernelTreasury) == 0
-        assert kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}) > 0
+        assert token.balanceOf(steward) == 0
+        assert kernel.getYieldRewards(steward, {"from": steward}) > 0
         assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (dai_balance*1e18)/ydai.pricePerShare())) < constants_mainnet.ACCURACY_Y
         assert token.balanceOf(learner) == constants_mainnet.FEE
         assert token.balanceOf(learning_curve) == 1e18
         assert ydai.balanceOf(learning_curve) == 0
-    kt_redemption = kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury})
-    kernel.withdrawYieldRewards({"from": kernelTreasury})
-    assert kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}) == 0
-    assert token.balanceOf(kernelTreasury) == kt_redemption
+    kt_redemption = kernel.getYieldRewards(steward, {"from": steward})
+    kernel.withdrawYieldRewards({"from": steward})
+    assert kernel.getYieldRewards(steward, {"from": steward}) == 0
+    assert token.balanceOf(steward) == kt_redemption
     assert token.balanceOf(kernel) == 0
     assert ydai.balanceOf(kernel) < 1000
 
@@ -148,7 +150,7 @@ def test_redeem_diff_checkpoints(
         contracts_with_learners,
         learners,
         token,
-        kernelTreasury,
+        steward,
         keeper,
         gen_lev_strat,
         ydai
@@ -161,28 +163,28 @@ def test_redeem_diff_checkpoints(
         gen_lev_strat.harvest({"from": keeper})
         for n, learner in enumerate(learners):
             dai_balance = kernel.getLearnerCourseEligibleFunds(learner, 0)
-            kt_dai_balance = kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury})
+            kt_dai_balance = kernel.getYieldRewards(steward, {"from": steward})
             kf_ydai_balance = ydai.balanceOf(kernel)
             tx = kernel.redeem(0, {"from": learner})
             assert "FeeRedeemed" in tx.events
             assert abs(tx.events["FeeRedeemed"]["amount"] - dai_balance) - \
-                   (kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}) - kt_dai_balance) \
+                   (kernel.getYieldRewards(steward, {"from": steward}) - kt_dai_balance) \
                    < constants_mainnet.ACCURACY_Y
             assert kernel.verify(learner, 0) == m + 1
             assert (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * m) > \
                    kernel.getLearnerCourseFundsRemaining(learner, 0) > \
                    (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * (m + 2))
             assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
-            assert kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}) > kt_dai_balance
+            assert kernel.getYieldRewards(steward, {"from": steward}) > kt_dai_balance
             assert abs(ydai.balanceOf(kernel) - (kf_ydai_balance - (dai_balance * 1e18) / ydai.pricePerShare())) < \
                    constants_mainnet.ACCURACY_Y
             assert token.balanceOf(learning_curve) == 1e18
             assert ydai.balanceOf(learning_curve) == 0
 
-    kt_redemption = kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury})
-    kernel.withdrawYieldRewards({"from": kernelTreasury})
-    assert kernel.getYieldRewards(kernelTreasury, {"from": kernelTreasury}) == 0
-    assert token.balanceOf(kernelTreasury) == kt_redemption
+    kt_redemption = kernel.getYieldRewards(steward, {"from": steward})
+    kernel.withdrawYieldRewards({"from": steward})
+    assert kernel.getYieldRewards(steward, {"from": steward}) == 0
+    assert token.balanceOf(steward) == kt_redemption
     assert token.balanceOf(kernel) == 0
     assert ydai.balanceOf(kernel) < 1000
 

@@ -163,7 +163,11 @@ contract KernelFactory {
     }
 
     /**
-     * @notice deposit the current batch of DAI in the contract to yearn
+     * @notice deposit the current batch of DAI in the contract to yearn.
+     *         the batching mechanism is used to reduce gas for each learner,
+     *         so at any point someone can call this function and deploy all
+     *         funds in a specific "batch" to yearn, allowing the funds to gain
+     *         interest.
      */
     function batchDeposit() external {
         uint256 batchId_ = batchIdTracker.current();
@@ -261,7 +265,7 @@ contract KernelFactory {
          bool deployed;
          require(learnerData[_courseId][msg.sender].blockRegistered != 0, "redeem: not a learner on this course");
          uint256 checkpointReached = learnerData[_courseId][msg.sender].checkpointReached;
-         (learnerShares, deployed) = getEligibleAmount(_courseId);
+         (learnerShares, deployed) = determineEligibleAmount(_courseId);
          uint256 latestCheckpoint = learnerData[_courseId][msg.sender].checkpointReached;
          if (deployed){
              shares = vault.withdraw(learnerShares);
@@ -284,27 +288,46 @@ contract KernelFactory {
     /**
      * @notice           handles learner minting new LEARN
      *                   checks via verify() what proportion of the fee to send to the
-     *                   Learning Curve, adds any yield earned to that, and returns all
+     *                   Learning Curve, any yield earned on the original fee is sent to
+     *                   the creator's designated address, and returns all
      *                   the resulting LEARN tokens to the learner.
-     *
-     *                   This acts as an effective discount for learners (as they receive more LEARN)
-     *                   without us having to maintain a whitelist or the like: great for simplicity,
-     *                   security and usability.
-     *
      * @param  _courseId course id to mint LEARN from
      */
     function mint(uint256 _courseId) external {
         uint256 shares;
         bool deployed;
         require(learnerData[_courseId][msg.sender].blockRegistered != 0, "mint: not a learner on this course");
-        (shares, deployed) = getEligibleAmount(_courseId);
+        uint256 checkpointReached = learnerData[_courseId][msg.sender].checkpointReached;
+        (shares, deployed) = determineEligibleAmount(_courseId);
+        uint256 latestCheckpoint = learnerData[_courseId][msg.sender].checkpointReached;
         if (deployed){
             shares = vault.withdraw(shares);
         }
-        stable.approve(address(learningCurve), shares);
-        uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-        learningCurve.mintForAddress(msg.sender, shares);
-        emit LearnMintedFromCourse(_courseId, msg.sender, shares, learningCurve.balanceOf(msg.sender) - balanceBefore);
+        uint256 fee_ = (latestCheckpoint - checkpointReached)
+                            * (courses[_courseId].fee / courses[_courseId].checkpoints);
+        if (fee_ < shares){
+            yieldRewards[courses[_courseId].creator] += shares - fee_;
+            stable.approve(address(learningCurve), fee_);
+            uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
+            learningCurve.mintForAddress(msg.sender, fee_);
+            emit LearnMintedFromCourse(
+                        _courseId,
+                        msg.sender,
+                        fee_,
+                         learningCurve.balanceOf(msg.sender) - balanceBefore
+            );
+        } else {
+            stable.approve(address(learningCurve), shares);
+            uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
+            learningCurve.mintForAddress(msg.sender, shares);
+            emit LearnMintedFromCourse(
+                         _courseId,
+                         msg.sender,
+                         shares,
+                         learningCurve.balanceOf(msg.sender) - balanceBefore
+            );
+        }
+
      }
 
     /**
@@ -320,14 +343,14 @@ contract KernelFactory {
     }
 
     /**
-     * @notice                gets the amount of funds that a learner is eligible for at this timestamp
+     * @notice                get and update the amount of funds that a learner is eligible for at this timestamp
      * @param  _courseId      course id to mint LEARN from
      * @return eligibleShares the number of shares the learner can withdraw
      *                        (if bool deployed is true will return yDai amount, if it is false it will
      *                        return the Dai amount)
      * @return deployed       whether the funds to be redeemed were deployed to yearn
      */
-    function getEligibleAmount(uint256 _courseId) internal returns (uint256 eligibleShares, bool deployed){
+    function determineEligibleAmount(uint256 _courseId) internal returns (uint256 eligibleShares, bool deployed){
         uint256 fee = learnerDeposit[_courseId][msg.sender];
         require(fee > 0, "no fee to redeem");
         uint256 checkpointReached = verify(msg.sender, _courseId);

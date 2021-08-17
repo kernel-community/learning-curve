@@ -57,9 +57,9 @@ def test_full(deployer, learners, steward, contracts, token):
         print("Learner " + str(n) + " balance before: " + str(learning_curve.balanceOf(learner)))
         learning_curve.approve(
             learning_curve,
-            learning_curve.getBurnableForReserveAmount(constants_unit.FEE),
+            learning_curve.balanceOf(learner),
             {"from": learner})
-        tx = learning_curve.burn(constants_unit.FEE, {"from": learner})
+        tx = learning_curve.burn(learning_curve.balanceOf(learner), {"from": learner})
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(token.balanceOf(learner)))
         print("DAI collateral: " + str(token.balanceOf(learning_curve)))

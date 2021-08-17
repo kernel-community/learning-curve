@@ -18,13 +18,13 @@ contract LearningCurve is ERC20 {
     using SafeERC20 for IERC20;
 
     // the constant product used in the curve
-    uint public constant k = 10000;
+    uint256 public constant k = 10000;
     IERC20 public reserve;
     uint256 public reserveBalance;
     bool initialised;
 
     event LearnMinted(address indexed learner, uint256 amountMinted, uint256 daiDeposited);
-    event LearnBurned(address indexed learner, uint256 amountBurned, uint256 daiReturned);
+    event LearnBurned(address indexed learner, uint256 amountBurned, uint256 daiReturned, uint256 e);
     constructor (address _reserve) ERC20("Learning Curve", "LEARN"){
         reserve = IERC20(_reserve);
     }
@@ -82,24 +82,33 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice used to burn LEARN and return DAI to the sender. The amount of dai that the burner wants
-    *         to be received should be sent in, this is because providing a Learn and converting to DAI
-    *         is complex mathematically.
-    * @param  _daiToReceive amount of dai the burner would like to receive
+    * @notice used to burn LEARN and return DAI to the sender.
+    * @param  _burnAmount amount of LEARN to burn
     */
-    function burn(uint256 _daiToReceive) public {
-        require(initialised, "!initialised");
-        uint256 ln = doLn((reserveBalance * 1e18) / (reserveBalance - _daiToReceive));
-        uint256 learnMagic = k * ln;
-        _burn(msg.sender, learnMagic);
-        reserveBalance -= _daiToReceive;
-        reserve.safeTransfer(msg.sender, _daiToReceive);
-        emit LearnBurned(msg.sender, learnMagic, _daiToReceive);
+    function burn(uint256 _burnAmount) public {
+          require(initialised, "!initialised");
+
+          uint256 e = e_calc(_burnAmount);
+          uint256 learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
+          _burn(msg.sender, _burnAmount);
+          reserveBalance -= learnMagic;
+          reserve.safeTransfer(msg.sender, learnMagic);
+          emit LearnBurned(msg.sender, _burnAmount, learnMagic, e);
+    }
+
+    /**
+    * @notice Calculates the natural exponent of the inputted value
+    * @param  x the number to be used in the natural log calc
+    */
+    function e_calc(uint256 x) internal pure returns (uint256 result){
+        PRBMath.UD60x18 memory xud = PRBMath.UD60x18({ value: x / k });
+        result = PRBMathUD60x18.exp(xud).value;
     }
 
     /**
     * @notice Calculates the natural logarithm of x.
-    * @param  x the number to be magic'd
+    * @param  x      the number to be used in the natural log calc
+    * @return result the natural log of the inputted value
     */
     function doLn(uint256 x) internal pure returns (uint256 result) {
         PRBMath.UD60x18 memory xud = PRBMath.UD60x18({ value: x });
@@ -107,17 +116,19 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice calculates the amount of LEARN to burn given the amount of DAI requested.
-    * @param  reserveAmount the amount of DAI to receive
+    * @notice calculates the amount of reserve received for a burn amount
+    * @param  _burnAmount   the amount of LEARN to burn
+    * @return learnMagic    the dai receivable for a certain amount of burnt LEARN
     */
-    function getBurnableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
-        uint256 ln = doLn((reserveBalance * 1e18) / (reserveBalance - reserveAmount));
-        learnMagic = k * ln;
+    function getPredictedBurn(uint256 _burnAmount) external view returns (uint256 learnMagic){
+          uint256 e = e_calc(_burnAmount);
+          learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
     }
 
     /**
     * @notice calculates the amount of LEARN to mint given the amount of DAI requested.
     * @param  reserveAmount the amount of DAI to lock
+    * @return learnMagic    the LEARN mintable for a certain amount of dai
     */
     function getMintableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
         uint256 ln = doLn((((reserveBalance + reserveAmount) * 1e18)) / reserveBalance);

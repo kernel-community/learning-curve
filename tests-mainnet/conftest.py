@@ -48,10 +48,11 @@ def contracts_with_courses(contracts, steward):
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
         constants_mainnet.URL,
-        constants_mainnet.CREATOR,
+        steward,
         {"from": steward}
         )
     yield kernel, learning_curve
+
 
 @pytest.fixture(scope="function")
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
@@ -72,6 +73,7 @@ def steward(accounts):
 def learners(accounts):
     yield accounts[2:6]
 
+
 @pytest.fixture
 def hackerman(accounts):
     yield accounts[9]
@@ -91,9 +93,11 @@ def token():
 def ydai():
     yield Contract.from_explorer("0x19D3364A399d251E894aC732651be8B0E4e85001")
 
+
 @pytest.fixture
 def gen_lev_strat():
     yield Contract.from_explorer("0x9f51F4df0b275dfB1F74f6Db86219bAe622B36ca")
+
 
 @pytest.fixture
 def keeper():
