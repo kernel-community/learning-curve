@@ -24,6 +24,10 @@ interface I_LearningCurve {
     function balanceOf(address) external view returns (uint256);
 }
 
+interface I_Registry {
+    function latestVault(address) external view returns (address);
+}
+
 /**
  * @title Kernel Factory
  * @author kjr217
@@ -57,14 +61,16 @@ contract KernelFactory {
     mapping(uint256 => uint256) batchTotal;
     // containing the total amount of yield token for a yield batch mapped by batchId
     mapping(uint256 => uint256) batchYieldTotal;
+    // containing the vault address of the the yield token for a yield batch mapped by batchId
+    mapping(uint256 => address) batchYieldAddress;
     // containing the underlying amount a learner deposited in a specific batchId
     mapping(uint256 => mapping (address => uint256)) learnerDeposit;
     // tracker for the batchId, current represents the current batch
     Counters.Counter private batchIdTracker;
     // the stablecoin used by the contract, DAI
     IERC20 public stable;
-    // the yearn vault used by the contract, yDAI
-    I_Vault public vault;
+    // the yearn resgistry used by the contract, to determine what the yDai address is.
+    I_Registry public registry;
     // yield rewards for an eligible address
     mapping(address => uint256) yieldRewards;
 
@@ -116,11 +122,11 @@ contract KernelFactory {
     constructor(
         address _stable,
         address _learningCurve,
-        address _vault
+        address _registry
     ) {
         stable = IERC20(_stable);
         learningCurve = I_LearningCurve(_learningCurve);
-        vault = I_Vault(_vault);
+        registry = I_Registry(_registry);
     }
 
     /**
@@ -175,12 +181,14 @@ contract KernelFactory {
         uint256 batchAmount_ = batchTotal[batchId_];
         batchIdTracker.increment();
         require(batchAmount_ > 0, "batchDeposit: no funds to deposit");
+        // get the address of the vault from the yRegistry
+        I_Vault vault = I_Vault(registry.latestVault(address(stable)));
         // approve the vault
         stable.approve(address(vault), batchAmount_);
         // mint y from the vault
         uint256 yTokens = vault.deposit(batchAmount_);
         batchYieldTotal[batchId_] = yTokens;
-
+        batchYieldAddress[batchId_] = address(vault);
         emit BatchDeposited(batchId_, batchAmount_, yTokens);
     }
 
@@ -268,6 +276,7 @@ contract KernelFactory {
          (learnerShares, deployed) = determineEligibleAmount(_courseId);
          uint256 latestCheckpoint = learnerData[_courseId][msg.sender].checkpointReached;
          if (deployed){
+             I_Vault vault = I_Vault(batchYieldAddress[learnerData[_courseId][msg.sender].yieldBatchId]);
              shares = vault.withdraw(learnerShares);
              uint256 fee_ = (latestCheckpoint - checkpointReached)
                                            * (courses[_courseId].fee / courses[_courseId].checkpoints);
@@ -301,6 +310,7 @@ contract KernelFactory {
         (shares, deployed) = determineEligibleAmount(_courseId);
         uint256 latestCheckpoint = learnerData[_courseId][msg.sender].checkpointReached;
         if (deployed){
+            I_Vault vault = I_Vault(batchYieldAddress[learnerData[_courseId][msg.sender].yieldBatchId]);
             shares = vault.withdraw(shares);
         }
         uint256 fee_ = (latestCheckpoint - checkpointReached)
@@ -409,6 +419,7 @@ contract KernelFactory {
         } else {
             uint256 temp =  (eligibleFunds * 1e18) / batchTotal[batchId_];
             uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
+            I_Vault vault = I_Vault(batchYieldAddress[learnerData[_courseId][msg.sender].yieldBatchId]);
             return eligibleShares * vault.pricePerShare() / 1e18;
         }
     }
@@ -424,6 +435,7 @@ contract KernelFactory {
         } else {
             uint256 temp =  (eligibleFunds * 1e18) / batchTotal[batchId_];
             uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
+            I_Vault vault = I_Vault(batchYieldAddress[learnerData[_courseId][msg.sender].yieldBatchId]);
             return eligibleShares * vault.pricePerShare() / 1e18;
         }
     }

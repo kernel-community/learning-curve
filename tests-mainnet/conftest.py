@@ -34,7 +34,7 @@ def contracts(deployer, dai):
     yield KernelFactory.deploy(
         dai.address,
         learning_curve.address,
-        constants_mainnet.VAULT,
+        constants_mainnet.REGISTRY,
         {"from": deployer}), \
         learning_curve
 
@@ -91,12 +91,12 @@ def token():
 
 @pytest.fixture
 def ydai():
-    yield Contract.from_explorer("0x19D3364A399d251E894aC732651be8B0E4e85001")
+    yield Contract.from_explorer(constants_mainnet.VAULT)
 
 
 @pytest.fixture
 def gen_lev_strat():
-    yield Contract.from_explorer("0x9f51F4df0b275dfB1F74f6Db86219bAe622B36ca")
+    yield Contract.from_explorer("0x6341c289b2E0795A04223DF04B53A77970958723")
 
 
 @pytest.fixture
