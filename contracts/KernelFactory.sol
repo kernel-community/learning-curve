@@ -201,7 +201,7 @@ contract KernelFactory {
      * @notice handles learner registration
      * @param  _courseId course id the learner would like to register to
      */
-    function register(uint256 _courseId) public {
+    function register(uint256 _courseId) external {
         require(
             _courseId < courseIdTracker.current(),
             "register: courseId does not exist"
@@ -315,19 +315,19 @@ contract KernelFactory {
                 ]
             );
             shares = vault.withdraw(learnerShares);
-            uint256 fee_ = (latestCheckpoint - checkpointReached) *
-                (courses[_courseId].fee / courses[_courseId].checkpoints);
+            uint256 fee_ = ((latestCheckpoint - checkpointReached) *
+                courses[_courseId].fee) / courses[_courseId].checkpoints;
             if (fee_ < shares) {
                 yieldRewards[courses[_courseId].creator] += shares - fee_;
-                stable.safeTransfer(msg.sender, fee_);
                 emit FeeRedeemed(_courseId, msg.sender, fee_);
+                stable.safeTransfer(msg.sender, fee_);
             } else {
-                stable.safeTransfer(msg.sender, shares);
                 emit FeeRedeemed(_courseId, msg.sender, shares);
+                stable.safeTransfer(msg.sender, shares);
             }
         } else {
-            stable.safeTransfer(msg.sender, learnerShares);
             emit FeeRedeemed(_courseId, msg.sender, learnerShares);
+            stable.safeTransfer(msg.sender, learnerShares);
         }
     }
 
@@ -359,8 +359,8 @@ contract KernelFactory {
             );
             shares = vault.withdraw(shares);
         }
-        uint256 fee_ = (latestCheckpoint - checkpointReached) *
-            (courses[_courseId].fee / courses[_courseId].checkpoints);
+        uint256 fee_ = ((latestCheckpoint - checkpointReached) *
+            courses[_courseId].fee) / courses[_courseId].checkpoints);
         if (fee_ < shares) {
             yieldRewards[courses[_courseId].creator] += shares - fee_;
             stable.approve(address(learningCurve), fee_);
@@ -393,8 +393,8 @@ contract KernelFactory {
     function withdrawYieldRewards() external {
         uint256 withdrawableReward = getYieldRewards(msg.sender);
         yieldRewards[msg.sender] = 0;
-        stable.safeTransfer(msg.sender, withdrawableReward);
         emit YieldRewardRedeemed(msg.sender, withdrawableReward);
+        stable.safeTransfer(msg.sender, withdrawableReward);
     }
 
     /**
@@ -417,9 +417,9 @@ contract KernelFactory {
                 learnerData[_courseId][msg.sender].checkpointReached,
             "fee redeemed at this checkpoint"
         );
-        uint256 eligibleAmount = (checkpointReached -
+        uint256 eligibleAmount = ((checkpointReached -
             learnerData[_courseId][msg.sender].checkpointReached) *
-            (courses[_courseId].fee / courses[_courseId].checkpoints);
+            courses[_courseId].fee) / courses[_courseId].checkpoints);
 
         learnerData[_courseId][msg.sender]
             .checkpointReached = checkpointReached;
