@@ -360,7 +360,7 @@ contract KernelFactory {
             shares = vault.withdraw(shares);
         }
         uint256 fee_ = ((latestCheckpoint - checkpointReached) *
-            courses[_courseId].fee) / courses[_courseId].checkpoints);
+            courses[_courseId].fee) / courses[_courseId].checkpoints;
         if (fee_ < shares) {
             yieldRewards[courses[_courseId].creator] += shares - fee_;
             stable.approve(address(learningCurve), fee_);
@@ -419,7 +419,7 @@ contract KernelFactory {
         );
         uint256 eligibleAmount = ((checkpointReached -
             learnerData[_courseId][msg.sender].checkpointReached) *
-            courses[_courseId].fee) / courses[_courseId].checkpoints);
+            courses[_courseId].fee) / courses[_courseId].checkpoints;
 
         learnerData[_courseId][msg.sender]
             .checkpointReached = checkpointReached;
