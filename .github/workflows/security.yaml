@@ -36,7 +36,7 @@ jobs:
           slither-version: '0.6.13'
           run-npm-install: true
           high-threshold: 0
-          medium-threshold: 20
+          medium-threshold: 21
           low-threshold: 30
           optimization-threshold: 5
           informative-threshold: 50
