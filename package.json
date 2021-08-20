@@ -13,12 +13,6 @@
     "lint:fix": "pretty-quick --pattern '**/*.*(sol|json)' --staged --verbose",
     "sec:flatten": "sh ./security/flattener-run.sh"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "yarn lint:fix",
-      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
-    }
-  },
   "dependencies": {
     "@commitlint/cli": "^12.1.4",
     "@commitlint/config-conventional": "^12.1.4"
