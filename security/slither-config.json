@@ -1,0 +1,10 @@
+{
+  "detectors_to_exclude": "naming-convention|solc-version|external-function",
+  "exclude_informational": false,
+  "exclude_low": false,
+  "exclude_medium": false,
+  "exclude_high": false,
+  "disable_color": false,
+  "filter_paths": "test|OpenZeppelin|iearn-finance",
+  "solc": "0.8.4"
+}

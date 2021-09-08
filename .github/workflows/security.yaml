@@ -1,0 +1,43 @@
+name: Security-checks
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+
+jobs:
+  main_job:
+    runs-on: ubuntu-latest
+    name: Solidity Security
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: actions/setup-node@v1.4.4
+        with:
+          node-version: '12'
+      - uses: actions/setup-python@v2
+        with:
+         python-version: '3.8'
+      - name: Prepare environment
+        run: |
+         npm install -g ganache-cli@6.12.1
+         pip3 install solc-select
+         solc-select install 0.8.4
+         solc-select use 0.8.4
+         pip3 install slither-analyzer
+         pip install -r requirements-dev.txt
+      - name: Prepare contracts
+        shell: bash
+        run: |
+          npm run sec:flatten
+      - name: Slither Static Analysis
+        uses: luisfontes19/slither-static-analysis-action@v0.3.2
+        with:
+          slither-version: '0.6.13'
+          run-npm-install: true
+          high-threshold: 0
+          medium-threshold: 21
+          low-threshold: 30
+          optimization-threshold: 999
+          informative-threshold: 999
+          projectPath: "./flattened"
