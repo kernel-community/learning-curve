@@ -1,0 +1,20 @@
+{
+  "name": "yearn-protocol",
+  "devDependencies": {
+    "ethlint": "^1.2.5",
+    "husky": "^4.3.0",
+    "prettier": "^2.3.1",
+    "prettier-plugin-solidity": "^1.0.0-alpha.57",
+    "pretty-quick": "^3.0.2"
+  },
+  "scripts": {
+    "lint": "pretty-quick --pattern '**/*.*(sol|json|py)' --verbose",
+    "lint:check": "prettier --check **/*.sol **/*.json",
+    "lint:fix": "pretty-quick --pattern '**/*.*(sol|json)' --staged --verbose",
+    "sec:flatten": "sh ./security/flattener-run.sh"
+  },
+  "dependencies": {
+    "@commitlint/cli": "^12.1.4",
+    "@commitlint/config-conventional": "^12.1.4"
+  }
+}

@@ -23,16 +23,26 @@ contract LearningCurve is ERC20 {
     uint256 public reserveBalance;
     bool initialised;
 
-    event LearnMinted(address indexed learner, uint256 amountMinted, uint256 daiDeposited);
-    event LearnBurned(address indexed learner, uint256 amountBurned, uint256 daiReturned, uint256 e);
-    constructor (address _reserve) ERC20("Learning Curve", "LEARN"){
+    event LearnMinted(
+        address indexed learner,
+        uint256 amountMinted,
+        uint256 daiDeposited
+    );
+    event LearnBurned(
+        address indexed learner,
+        uint256 amountBurned,
+        uint256 daiReturned,
+        uint256 e
+    );
+
+    constructor(address _reserve) ERC20("Learning Curve", "LEARN") {
         reserve = IERC20(_reserve);
     }
 
     /**
-    * @notice initialise the contract, mainly for maths purposes, requires the transfer of 1 DAI.
-    * @dev    only callable once
-    */
+     * @notice initialise the contract, mainly for maths purposes, requires the transfer of 1 DAI.
+     * @dev    only callable once
+     */
     function initialise() external {
         require(!initialised, "initialised");
         initialised = true;
@@ -42,16 +52,16 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice This method allows anyone to mint LEARN tokens dependent on the
-    *         amount of DAI they send.
-    *
-    *         The amount minted depends on the amount of collateral already locked in
-    *         the curve. The more DAI is locked, the less LEARN gets minted, ensuring
-    *         that the price of LEARN increases linearly.
-    *
-    *         Please see: https://docs.google.com/spreadsheets/d/1hjWFGPC_B9D7b6iI00DTVVLrqRFv3G5zFNiCBS7y_V8/edit?usp=sharing
-    * @param  _wad amount of Dai to send to the contract
-    */
+     * @notice This method allows anyone to mint LEARN tokens dependent on the
+     *         amount of DAI they send.
+     *
+     *         The amount minted depends on the amount of collateral already locked in
+     *         the curve. The more DAI is locked, the less LEARN gets minted, ensuring
+     *         that the price of LEARN increases linearly.
+     *
+     *         Please see: https://docs.google.com/spreadsheets/d/1hjWFGPC_B9D7b6iI00DTVVLrqRFv3G5zFNiCBS7y_V8/edit?usp=sharing
+     * @param  _wad amount of Dai to send to the contract
+     */
     function mint(uint256 _wad) public {
         require(initialised, "!initialised");
         reserve.safeTransferFrom(msg.sender, address(this), _wad);
@@ -63,14 +73,14 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice Same as normal mint, except that an address is passed in which the minted
-    *         LEARN is sent to. Necessary to allow for mints directly from a Course, where
-    *         we want to learner to receive LEARN, not the course contract.
-    *
-    *         Can be used to send DAI from one address and have LEARN returned to another.
-    * @param  learner address of the learner to mint LEARN to
-    * @param  _wad    amount of DAI being sent in.
-    */
+     * @notice Same as normal mint, except that an address is passed in which the minted
+     *         LEARN is sent to. Necessary to allow for mints directly from a Course, where
+     *         we want to learner to receive LEARN, not the course contract.
+     *
+     *         Can be used to send DAI from one address and have LEARN returned to another.
+     * @param  learner address of the learner to mint LEARN to
+     * @param  _wad    amount of DAI being sent in.
+     */
     function mintForAddress(address learner, uint256 _wad) public {
         require(initialised, "!initialised");
         reserve.safeTransferFrom(msg.sender, address(this), _wad);
@@ -82,57 +92,66 @@ contract LearningCurve is ERC20 {
     }
 
     /**
-    * @notice used to burn LEARN and return DAI to the sender.
-    * @param  _burnAmount amount of LEARN to burn
-    */
+     * @notice used to burn LEARN and return DAI to the sender.
+     * @param  _burnAmount amount of LEARN to burn
+     */
     function burn(uint256 _burnAmount) public {
-          require(initialised, "!initialised");
+        require(initialised, "!initialised");
 
-          uint256 e = e_calc(_burnAmount);
-          uint256 learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
-          _burn(msg.sender, _burnAmount);
-          reserveBalance -= learnMagic;
-          reserve.safeTransfer(msg.sender, learnMagic);
-          emit LearnBurned(msg.sender, _burnAmount, learnMagic, e);
+        uint256 e = e_calc(_burnAmount);
+        uint256 learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
+        _burn(msg.sender, _burnAmount);
+        reserveBalance -= learnMagic;
+        reserve.safeTransfer(msg.sender, learnMagic);
+        emit LearnBurned(msg.sender, _burnAmount, learnMagic, e);
     }
 
     /**
-    * @notice Calculates the natural exponent of the inputted value
-    * @param  x the number to be used in the natural log calc
-    */
-    function e_calc(uint256 x) internal pure returns (uint256 result){
-        PRBMath.UD60x18 memory xud = PRBMath.UD60x18({ value: x / k });
+     * @notice Calculates the natural exponent of the inputted value
+     * @param  x the number to be used in the natural log calc
+     */
+    function e_calc(uint256 x) internal pure returns (uint256 result) {
+        PRBMath.UD60x18 memory xud = PRBMath.UD60x18({value: x / k});
         result = PRBMathUD60x18.exp(xud).value;
     }
 
     /**
-    * @notice Calculates the natural logarithm of x.
-    * @param  x      the number to be used in the natural log calc
-    * @return result the natural log of the inputted value
-    */
+     * @notice Calculates the natural logarithm of x.
+     * @param  x      the number to be used in the natural log calc
+     * @return result the natural log of the inputted value
+     */
     function doLn(uint256 x) internal pure returns (uint256 result) {
-        PRBMath.UD60x18 memory xud = PRBMath.UD60x18({ value: x });
+        PRBMath.UD60x18 memory xud = PRBMath.UD60x18({value: x});
         result = PRBMathUD60x18.ln(xud).value;
     }
 
     /**
-    * @notice calculates the amount of reserve received for a burn amount
-    * @param  _burnAmount   the amount of LEARN to burn
-    * @return learnMagic    the dai receivable for a certain amount of burnt LEARN
-    */
-    function getPredictedBurn(uint256 _burnAmount) external view returns (uint256 learnMagic){
-          uint256 e = e_calc(_burnAmount);
-          learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
+     * @notice calculates the amount of reserve received for a burn amount
+     * @param  _burnAmount   the amount of LEARN to burn
+     * @return learnMagic    the dai receivable for a certain amount of burnt LEARN
+     */
+    function getPredictedBurn(uint256 _burnAmount)
+        external
+        view
+        returns (uint256 learnMagic)
+    {
+        uint256 e = e_calc(_burnAmount);
+        learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
     }
 
     /**
-    * @notice calculates the amount of LEARN to mint given the amount of DAI requested.
-    * @param  reserveAmount the amount of DAI to lock
-    * @return learnMagic    the LEARN mintable for a certain amount of dai
-    */
-    function getMintableForReserveAmount(uint256 reserveAmount) external view returns (uint256 learnMagic){
-        uint256 ln = doLn((((reserveBalance + reserveAmount) * 1e18)) / reserveBalance);
+     * @notice calculates the amount of LEARN to mint given the amount of DAI requested.
+     * @param  reserveAmount the amount of DAI to lock
+     * @return learnMagic    the LEARN mintable for a certain amount of dai
+     */
+    function getMintableForReserveAmount(uint256 reserveAmount)
+        external
+        view
+        returns (uint256 learnMagic)
+    {
+        uint256 ln = doLn(
+            (((reserveBalance + reserveAmount) * 1e18)) / reserveBalance
+        );
         learnMagic = k * ln;
     }
-
 }

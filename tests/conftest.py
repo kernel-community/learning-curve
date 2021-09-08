@@ -29,7 +29,7 @@ def contracts(deployer, token):
     yield KernelFactory.deploy(
         token.address,
         learning_curve.address,
-        constants_unit.VAULT,
+        constants_unit.REGISTRY,
         {"from": deployer}), \
         learning_curve
 
