@@ -116,18 +116,11 @@ def test_burn(learners, token, deployer, contracts):
         numerator = float((learning_curve.reserveBalance() / 1e18))
         predicted_burn = constants_unit.MINT_AMOUNT
         lc_supply_before = learning_curve.totalSupply()
-        print(abs(predicted_burn - learning_curve.getPredictedBurn(learner_before_lc_bal)))
-        print(learning_curve.totalSupply())
-        print(token.balanceOf(learning_curve))
         tx = learning_curve.burn(learning_curve.balanceOf(learner), {"from": learner})
-        print(tx.events["LearnBurned"])
         assert abs(learner_before_lc_bal - tx.events["LearnBurned"]["amountBurned"] + learning_curve.balanceOf(learner)) < constants_unit.ACCURACY
         assert abs(
             learner_before_dai_bal + constants_unit.MINT_AMOUNT - token.balanceOf(learner)) <= constants_unit.ACCURACY
         assert before_bal - constants_unit.MINT_AMOUNT - token.balanceOf(learning_curve) <= constants_unit.ACCURACY
         assert before_bal - constants_unit.MINT_AMOUNT - learning_curve.reserveBalance() <= constants_unit.ACCURACY
         assert abs(learning_curve.totalSupply() + (learner_before_lc_bal - lc_supply_before)) < constants_unit.ACCURACY
-        print(token.balanceOf(learner))
-        print(learner_before_lc_bal, learning_curve.balanceOf(learner))
-    print(learning_curve.totalSupply())
-    print(token.balanceOf(learning_curve))
+

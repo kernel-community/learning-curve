@@ -2,7 +2,6 @@ import brownie
 from brownie import LearningCurve, KernelFactory
 import constants_unit
 
-
 def test_create_courses(contracts, steward):
     kernel, learning_curve = contracts
     for n in range(5):
@@ -259,3 +258,5 @@ def test_mint_lc_not_initialised(token, deployer, steward, learners):
         brownie.chain.mine(constants_unit.CHECKPOINTS * constants_unit.CHECKPOINT_BLOCK_SPACING)
         with brownie.reverts("!initialised"):
             kernel.mint(0, {"from": learner})
+
+

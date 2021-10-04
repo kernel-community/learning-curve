@@ -1,8 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.4;
-pragma abicoder v2;
-
-import "./LearningCurve.sol";
+pragma solidity 0.8.0;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -36,6 +33,36 @@ interface I_Registry {
     function latestVault(address) external view returns (address);
 }
 
+interface IERC20Permit {
+
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    //EIP2612 implementation
+    function permit(
+        address holder,
+        address spender,
+        uint256 amount,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    function nonces(address holder) external view returns(uint);
+
+    function pull(address usr, uint256 wad) external;
+
+    function approve(address usr, uint256 wad) external returns (bool);
+}
 /**
  * @title Kernel Factory
  * @author kjr217
@@ -201,7 +228,7 @@ contract KernelFactory {
      * @notice handles learner registration
      * @param  _courseId course id the learner would like to register to
      */
-    function register(uint256 _courseId) external {
+    function register(uint256 _courseId) public {
         require(
             _courseId < courseIdTracker.current(),
             "register: courseId does not exist"
@@ -221,6 +248,13 @@ contract KernelFactory {
         learnerDeposit[batchId_][msg.sender] += course.fee;
 
         emit LearnerRegistered(_courseId, msg.sender);
+    }
+    /**
+     * @notice handles learner registration with permit for approval
+     */
+    function permitAndRegister(uint256 _courseId, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) external {
+        IERC20Permit(address(stable)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        register(_courseId);
     }
 
     /**

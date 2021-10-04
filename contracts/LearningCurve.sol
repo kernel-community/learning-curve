@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.4;
+pragma solidity 0.8.0;
 
 import "./PRBMath.sol";
 import "./PRBMathUD60x18.sol";
@@ -97,7 +97,6 @@ contract LearningCurve is ERC20 {
      */
     function burn(uint256 _burnAmount) public {
         require(initialised, "!initialised");
-
         uint256 e = e_calc(_burnAmount);
         uint256 learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
         _burn(msg.sender, _burnAmount);
