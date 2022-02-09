@@ -2,6 +2,27 @@ import brownie
 from brownie import LearningCurve, KernelFactory
 import constants_unit
 
+from eth_account import Account
+from eth_account._utils.structured_data.hashing import hash_domain
+from eth_account.messages import encode_structured_data
+from eth_utils import encode_hex
+
+
+def test_register_permit(contracts_with_courses, learners, token, deployer):
+    kernel, learning_curve = contracts_with_courses
+    signer = Account.create()
+    holder = signer.address
+    token.transfer(holder, constants_unit.FEE, {"from": deployer})
+    assert token.balanceOf(holder) == constants_unit.FEE
+    permit = build_permit(holder, str(kernel), token, 3600)
+    signed = signer.sign_message(permit)
+    print(token.balanceOf(kernel.address))
+    tx = kernel.permitAndRegister(0, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
+    print(token.balanceOf(kernel.address))
+    assert "LearnerRegistered" in tx.events
+    assert tx.events["LearnerRegistered"]["courseId"] == 0
+
+
 def test_create_courses(contracts, steward):
     kernel, learning_curve = contracts
     for n in range(5):
@@ -77,7 +98,7 @@ def test_register(contracts_with_courses, learners, token, deployer):
 
 def test_register_malicious(contracts_with_courses, token, deployer, hackerman):
     kernel, learning_curve = contracts_with_courses
-    with brownie.reverts('ERC20: transfer amount exceeds balance'):
+    with brownie.reverts():
         kernel.register(0, {"from": hackerman})
 
     token.transfer(hackerman, constants_unit.FEE, {"from": deployer})
@@ -260,3 +281,37 @@ def test_mint_lc_not_initialised(token, deployer, steward, learners):
             kernel.mint(0, {"from": learner})
 
 
+def build_permit(holder, spender, token, expiry):
+    data = {
+        "types": {
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+            "Permit": [
+                {"name": "holder", "type": "address"},
+                {"name": "spender", "type": "address"},
+                {"name": "nonce", "type": "uint256"},
+                {"name": "expiry", "type": "uint256"},
+                {"name": "allowed", "type": "bool"},
+            ],
+        },
+        "domain": {
+            "name": token.name(),
+            "version": token.version(),
+            "chainId": 1,
+            "verifyingContract": str(token),
+        },
+        "primaryType": "Permit",
+        "message": {
+            "holder": holder,
+            "spender": spender,
+            "nonce": token.nonces(holder),
+            "expiry": 0,
+            "allowed": True,
+        },
+    }
+    assert encode_hex(hash_domain(data)) == token.DOMAIN_SEPARATOR()
+    return encode_structured_data(data)

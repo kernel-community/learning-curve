@@ -3,6 +3,10 @@ from brownie import LearningCurve
 import constants_unit
 from math import log as ln
 
+from eth_account import Account
+from eth_account._utils.structured_data.hashing import hash_domain
+from eth_account.messages import encode_structured_data
+from eth_utils import encode_hex
 
 def test_flash_behaviour(token, deployer, hackerman, contracts, learners):
     _, learning_curve = contracts
@@ -62,9 +66,9 @@ def test_init(token, deployer):
 
 def test_init_malicious(token, deployer, hackerman):
     learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
-    with brownie.reverts('ERC20: transfer amount exceeds balance'):
+    with brownie.reverts():
         learning_curve.initialise({"from": hackerman})
-    with brownie.reverts('ERC20: transfer amount exceeds allowance'):
+    with brownie.reverts():
         learning_curve.initialise({"from": deployer})
     token.approve(learning_curve, 1e18, {"from": deployer})
     learning_curve.initialise({"from": deployer})
@@ -96,6 +100,32 @@ def test_mint(learners, token, deployer, contracts):
             learning_curve) == learning_curve.reserveBalance()
         assert abs(learning_curve.totalSupply() - (predicted_mint + lc_supply_before)) < constants_unit.ACCURACY
 
+def test_mint_permit(token, deployer, contracts):
+    _, learning_curve = contracts
+    signer = Account.create()
+    holder = signer.address
+    token.transfer(holder, constants_unit.MINT_AMOUNT, {"from": deployer})
+    assert token.balanceOf(holder) == constants_unit.MINT_AMOUNT
+    permit = build_permit(holder, str(learning_curve), token, 3600)
+    signed = signer.sign_message(permit)
+    print(token.balanceOf(learning_curve.address))
+    before_bal = token.balanceOf(learning_curve)
+    learner_before_dai_bal = token.balanceOf(holder)
+    learner_before_lc_bal = learning_curve.balanceOf(holder)
+    numerator = float((learning_curve.reserveBalance() / 1e18 + constants_unit.MINT_AMOUNT / 1e18))
+    predicted_mint = float(constants_unit.K * ln(numerator / (learning_curve.reserveBalance() / 1e18))) * 1e18
+    lc_supply_before = learning_curve.totalSupply()
+    assert abs(predicted_mint - learning_curve.getMintableForReserveAmount(constants_unit.MINT_AMOUNT)) < \
+               constants_unit.ACCURACY
+    tx = learning_curve.permitAndMint(constants_unit.MINT_AMOUNT, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
+    print(token.balanceOf(learning_curve.address))
+
+    assert abs(learner_before_lc_bal + predicted_mint - learning_curve.balanceOf(holder)) < constants_unit.ACCURACY
+    assert learner_before_dai_bal - constants_unit.MINT_AMOUNT == token.balanceOf(holder)
+    assert before_bal + constants_unit.MINT_AMOUNT == token.balanceOf(
+    learning_curve) == learning_curve.reserveBalance()
+    assert abs(learning_curve.totalSupply() - (predicted_mint + lc_supply_before)) < constants_unit.ACCURACY
+
 
 def test_burn(learners, token, deployer, contracts):
     _, learning_curve = contracts
@@ -124,3 +154,37 @@ def test_burn(learners, token, deployer, contracts):
         assert before_bal - constants_unit.MINT_AMOUNT - learning_curve.reserveBalance() <= constants_unit.ACCURACY
         assert abs(learning_curve.totalSupply() + (learner_before_lc_bal - lc_supply_before)) < constants_unit.ACCURACY
 
+def build_permit(holder, spender, token, expiry):
+    data = {
+        "types": {
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+            "Permit": [
+                {"name": "holder", "type": "address"},
+                {"name": "spender", "type": "address"},
+                {"name": "nonce", "type": "uint256"},
+                {"name": "expiry", "type": "uint256"},
+                {"name": "allowed", "type": "bool"},
+            ],
+        },
+        "domain": {
+            "name": token.name(),
+            "version": token.version(),
+            "chainId": 1,
+            "verifyingContract": str(token),
+        },
+        "primaryType": "Permit",
+        "message": {
+            "holder": holder,
+            "spender": spender,
+            "nonce": token.nonces(holder),
+            "expiry": 0,
+            "allowed": True,
+        },
+    }
+    assert encode_hex(hash_domain(data)) == token.DOMAIN_SEPARATOR()
+    return encode_structured_data(data)

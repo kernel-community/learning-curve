@@ -3,18 +3,48 @@ pragma solidity 0.8.0;
 
 import "./PRBMath.sol";
 import "./PRBMathUD60x18.sol";
-
+import "./ERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+interface DaiPermit {
+
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    //EIP2612 implementation
+    function permit(
+        address holder,
+        address spender,
+        uint256 amount,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    function nonces(address holder) external view returns(uint);
+
+    function pull(address usr, uint256 wad) external;
+
+    function approve(address usr, uint256 wad) external returns (bool);
+}
+
 /**
  * @title  LearningCurve
- * @author kjr217
  * @notice A simple constant product curve that mints LEARN tokens whenever
  *         anyone sends it DAI, or burns LEARN tokens and returns DAI.
  */
-contract LearningCurve is ERC20 {
+contract LearningCurve is ERC20Permit {
     using SafeERC20 for IERC20;
 
     // the constant product used in the curve
@@ -35,7 +65,7 @@ contract LearningCurve is ERC20 {
         uint256 e
     );
 
-    constructor(address _reserve) ERC20("Learning Curve", "LEARN") {
+    constructor(address _reserve) ERC20Permit('Learning Curve') ERC20("Learning Curve", "LEARN") {
         reserve = IERC20(_reserve);
     }
 
@@ -51,6 +81,13 @@ contract LearningCurve is ERC20 {
         _mint(address(this), 10001e18);
     }
 
+    /**
+     * @notice handles LEARN mint with an approval for DAI
+     */
+    function permitAndMint(uint256 _amount, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) external {
+        DaiPermit(address(reserve)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        mint(_amount);
+    }
     /**
      * @notice This method allows anyone to mint LEARN tokens dependent on the
      *         amount of DAI they send.

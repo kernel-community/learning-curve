@@ -4,7 +4,6 @@ import constants_mainnet
 from brownie import (
     KernelFactory,
     LearningCurve,
-    BasicERC20,
     accounts,
     web3,
     Wei,
@@ -81,12 +80,12 @@ def hackerman(accounts):
 
 @pytest.fixture
 def dai():
-    yield Contract.from_explorer("0x6B175474E89094C44Da98b954EedeAC495271d0F")
+    yield Contract.from_explorer(constants_mainnet.DAI)
 
 
 @pytest.fixture
 def token():
-    yield Contract.from_explorer("0x6B175474E89094C44Da98b954EedeAC495271d0F")
+    yield Contract.from_explorer(constants_mainnet.DAI)
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@ import constants_unit
 from brownie import (
     KernelFactory,
     LearningCurve,
-    BasicERC20,
+    Dai,
 )
 
 
@@ -16,8 +16,8 @@ def isolate_func(fn_isolation):
 
 @pytest.fixture(scope="function", autouse=True)
 def token(deployer):
-    token = BasicERC20.deploy("Test", "TT", {"from": deployer})
-    token.mint(1_000_000_000_000_000_000e18)
+    token = Dai.deploy(1, {"from": deployer})
+    token.mint(deployer, 1_000_000_000_000_000_000e18)
     yield token
 
 
