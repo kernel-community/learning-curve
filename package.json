@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@commitlint/cli": "^12.1.4",
-    "@commitlint/config-conventional": "^12.1.4",
-    "ganache-cli": "^6.12.2"
+    "@commitlint/config-conventional": "^12.1.4"
   }
 }
