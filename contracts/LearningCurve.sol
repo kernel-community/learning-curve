@@ -1,25 +1,51 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.4;
+pragma solidity 0.8.0;
 
+import "./ERC20.sol";
 import "./PRBMath.sol";
 import "./PRBMathUD60x18.sol";
+import "./SafeTransferLib.sol";
+interface DaiPermit {
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    //EIP2612 implementation
+    function permit(
+        address holder,
+        address spender,
+        uint256 amount,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    function nonces(address holder) external view returns(uint);
+
+    function pull(address usr, uint256 wad) external;
+
+    function approve(address usr, uint256 wad) external returns (bool);
+}
 
 /**
  * @title  LearningCurve
- * @author kjr217
  * @notice A simple constant product curve that mints LEARN tokens whenever
  *         anyone sends it DAI, or burns LEARN tokens and returns DAI.
  */
 contract LearningCurve is ERC20 {
-    using SafeERC20 for IERC20;
 
     // the constant product used in the curve
     uint256 public constant k = 10000;
-    IERC20 public reserve;
+    ERC20 public reserve;
     uint256 public reserveBalance;
     bool initialised;
 
@@ -35,8 +61,8 @@ contract LearningCurve is ERC20 {
         uint256 e
     );
 
-    constructor(address _reserve) ERC20("Learning Curve", "LEARN") {
-        reserve = IERC20(_reserve);
+    constructor(address _reserve) ERC20("Learning Curve", "LEARN", 18) {
+        reserve = ERC20(_reserve);
     }
 
     /**
@@ -46,11 +72,18 @@ contract LearningCurve is ERC20 {
     function initialise() external {
         require(!initialised, "initialised");
         initialised = true;
-        reserve.safeTransferFrom(msg.sender, address(this), 1e18);
+        SafeTransferLib.safeTransferFrom(reserve, msg.sender, address(this), 1e18);
         reserveBalance += 1e18;
         _mint(address(this), 10001e18);
     }
 
+    /**
+     * @notice handles LEARN mint with an approval for DAI
+     */
+    function permitAndMint(uint256 _amount, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) external {
+        DaiPermit(address(reserve)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        mint(_amount);
+    }
     /**
      * @notice This method allows anyone to mint LEARN tokens dependent on the
      *         amount of DAI they send.
@@ -64,7 +97,7 @@ contract LearningCurve is ERC20 {
      */
     function mint(uint256 _wad) public {
         require(initialised, "!initialised");
-        reserve.safeTransferFrom(msg.sender, address(this), _wad);
+        SafeTransferLib.safeTransferFrom(reserve, msg.sender, address(this), _wad);
         uint256 ln = doLn((((reserveBalance + _wad) * 1e18)) / reserveBalance);
         uint256 learnMagic = k * ln;
         reserveBalance += _wad;
@@ -83,7 +116,7 @@ contract LearningCurve is ERC20 {
      */
     function mintForAddress(address learner, uint256 _wad) public {
         require(initialised, "!initialised");
-        reserve.safeTransferFrom(msg.sender, address(this), _wad);
+        SafeTransferLib.safeTransferFrom(reserve, msg.sender, address(this), _wad);
         uint256 ln = doLn((((reserveBalance + _wad) * 1e18)) / reserveBalance);
         uint256 learnMagic = k * ln;
         reserveBalance += _wad;
@@ -97,12 +130,11 @@ contract LearningCurve is ERC20 {
      */
     function burn(uint256 _burnAmount) public {
         require(initialised, "!initialised");
-
         uint256 e = e_calc(_burnAmount);
         uint256 learnMagic = reserveBalance - (reserveBalance * 1e18) / e;
         _burn(msg.sender, _burnAmount);
         reserveBalance -= learnMagic;
-        reserve.safeTransfer(msg.sender, learnMagic);
+        SafeTransferLib.safeTransfer(reserve, msg.sender, learnMagic);
         emit LearnBurned(msg.sender, _burnAmount, learnMagic, e);
     }
 

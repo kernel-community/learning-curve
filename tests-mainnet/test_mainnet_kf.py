@@ -1,5 +1,24 @@
 import brownie
 import constants_mainnet
+from eth_account import Account
+from eth_account._utils.structured_data.hashing import hash_domain
+from eth_account.messages import encode_structured_data
+from eth_utils import encode_hex
+
+
+def test_register_permit(contracts_with_courses, learners, token, deployer):
+    kernel, learning_curve = contracts_with_courses
+    signer = Account.create()
+    holder = signer.address
+    token.transfer(holder, constants_mainnet.FEE, {"from": deployer})
+    assert token.balanceOf(holder) == constants_mainnet.FEE
+    permit = build_permit(holder, str(kernel), token, 3600)
+    signed = signer.sign_message(permit)
+    print(token.balanceOf(kernel.address))
+    tx = kernel.permitAndRegister(0, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
+    print(token.balanceOf(kernel.address))
+    assert "LearnerRegistered" in tx.events
+    assert tx.events["LearnerRegistered"]["courseId"] == 0
 
 
 def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
@@ -194,3 +213,39 @@ def test_verify(contracts_with_learners, learners, keeper):
     for n in range(constants_mainnet.CHECKPOINTS + 1):
         assert kernel.verify(learner, 0, {"from": learner}) == n
         brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
+
+
+def build_permit(holder, spender, token, expiry):
+    data = {
+        "types": {
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+            "Permit": [
+                {"name": "holder", "type": "address"},
+                {"name": "spender", "type": "address"},
+                {"name": "nonce", "type": "uint256"},
+                {"name": "expiry", "type": "uint256"},
+                {"name": "allowed", "type": "bool"},
+            ],
+        },
+        "domain": {
+            "name": token.name(),
+            "version": token.version(),
+            "chainId": 1,
+            "verifyingContract": str(token),
+        },
+        "primaryType": "Permit",
+        "message": {
+            "holder": holder,
+            "spender": spender,
+            "nonce": token.nonces(holder),
+            "expiry": 0,
+            "allowed": True,
+        },
+    }
+    assert encode_hex(hash_domain(data)) == token.DOMAIN_SEPARATOR()
+    return encode_structured_data(data)
