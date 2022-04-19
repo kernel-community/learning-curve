@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.0;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -260,7 +260,7 @@ contract KernelFactory {
 
         // transfer the amount directly into a vault in order to save gas fees if possible
         uint256 scholarshipId_ = scholarshipIdTracker.current();
-        // initiate the next batch
+        // initiate the next scholarship
         scholarshipIdTracker.increment();
         // get the address of the vault from the yRegistry
         I_Vault vault = I_Vault(registry.latestVault(address(stable)));
