@@ -90,7 +90,7 @@ contract KernelFactory {
 
     struct Scholarship {
         uint256 amount; // the amount provided for scholarships for this particular course
-        uint256 scholars; // the number of scholarships open for this course
+        uint256 scholars; // the number of scholarships the amount creates for this course
         address provider; // the address providing scholarships, used for withdrawals
     }
 
@@ -383,7 +383,12 @@ contract KernelFactory {
         );
         Course memory course =  courses[_courseId];
         uint256 scholarsRemoved = course.fee / _amount;
-        scholarship.scholars -= scholarsRemoved;
+        // check, as provider could withdraw full amount while scholars are still registered, potentially causing solidity weirdness.
+        if (scholarsRemoved > scholarship.scholars) {
+            scholarship.scholars = 0;
+        } else {
+            scholarship.scholars -= scholarsRemoved;
+        }
         emit ScholarshipWithdrawn(
             scholarshipId_,
             _amount,
