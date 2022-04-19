@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.0;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
