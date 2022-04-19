@@ -77,6 +77,7 @@ contract KernelFactory {
         uint256 checkpoints; // number of checkpoints the course should have
         uint256 fee; // the fee for entering the course
         uint256 checkpointBlockSpacing; // the block spacing between checkpoints
+        uint256 scholars; // the number of scholarships open for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
     }
@@ -98,19 +99,30 @@ contract KernelFactory {
     mapping(uint256 => uint256) batchYieldTotal;
     // containing the vault address of the the yield token for a yield batch mapped by batchId
     mapping(uint256 => address) batchYieldAddress;
+
+    // containing the total underlying amount for a yield scholarship mapped by scholarshipId
+    mapping(uint256 => uint256) scholarshipTotal;
+    // containing the total amount of yield token for a yield scholarship mapped by scholarshipId
+    mapping(uint256 => uint256) scholarshipYieldTotal;
+    // containing the vault address of the the yield token for a yield scholarship mapped by scholarshipId
+    mapping(uint256 => address) scholarshipYieldAddress;
+
     // containing the underlying amount a learner deposited in a specific batchId
     mapping(uint256 => mapping(address => uint256)) learnerDeposit;
-    // tracker for the batchId, current represents the current batch
-    Counters.Counter private batchIdTracker;
-    // the stablecoin used by the contract, DAI
-    IERC20 public stable;
-    // the yearn resgistry used by the contract, to determine what the yDai address is.
-    I_Registry public registry;
     // yield rewards for an eligible address
     mapping(address => uint256) yieldRewards;
 
     // tracker for the courseId, current represents the id of the next course
     Counters.Counter private courseIdTracker;
+    // tracker for the batchId, current represents the current batch
+    Counters.Counter private batchIdTracker;
+    // tracker for the scholarshipId, current represents the current batch
+    Counters.Counter private scholarshipIdTracker;
+
+    // the stablecoin used by the contract, DAI
+    IERC20 public stable;
+    // the yearn resgistry used by the contract, to determine what the yDai address is.
+    I_Registry public registry;
     // interface for the learning curve
     I_LearningCurve public learningCurve;
 
@@ -135,6 +147,12 @@ contract KernelFactory {
         uint256 batchId,
         uint256 batchAmount,
         uint256 batchYieldAmount
+    );
+    event ScholarshipDeposited(
+        uint256 courseId,
+        uint256 scholarshipId,
+        uint256 scholarshipAmount,
+        uint256 scholarshipYieldAmount
     );
     event CheckpointUpdated(
         uint256 courseId,
@@ -187,6 +205,7 @@ contract KernelFactory {
             _checkpoints,
             _fee,
             _checkpointBlockSpacing,
+            0,
             _url,
             _creator
         );
@@ -198,6 +217,42 @@ contract KernelFactory {
             _url,
             _creator
         );
+    }
+
+    /**
+     * @notice this method allows anyone to create perpetual scholarships by staking
+     *         capital for learners to use. The can claim it back at any time.
+     * @param  _courseId courseId the donor would like to fund
+     * @param  _amount the amount in DAI that the donor wishes to give
+     */
+    function createScholarships(uint256 _courseId, uint256 _amount) external {
+        require(
+            _amount >= 1000, 
+            "createScholarships: must seed scholarship with enough funds to justify gas costs"
+        );
+        require(
+            _courseId < courseIdTracker.current(),
+            "createScholarships: courseId does not exist"
+        );
+
+        // transfer the amount directly into a vault in order to save gas fees if possible
+        uint256 scholarshipId_ = scholarshipIdTracker.current();
+        // initiate the next batch
+        scholarshipIdTracker.increment();
+        // get the address of the vault from the yRegistry
+        I_Vault vault = I_Vault(registry.latestVault(address(stable)));
+        // approve the vault
+        stable.approve(address(vault), _amount);
+        // mint y from the vault
+        uint256 yTokens = vault.deposit(_amount);
+        scholarshipYieldTotal[scholarshipId_] = yTokens;
+        // TODO: does this ensure that the courseCreator gets the yield? May need to add another line here.
+        scholarshipYieldAddress[scholarshipId_] = address(vault);
+        emit ScholarshipDeposited(_courseId, scholarshipId_, _amount, yTokens);
+
+        // calculate how many scholarships can be awarded based on amount
+        Course storage course = courses[_courseId];
+        course.scholars = _amount / course.fee;
     }
 
     /**
@@ -222,6 +277,50 @@ contract KernelFactory {
         batchYieldTotal[batchId_] = yTokens;
         batchYieldAddress[batchId_] = address(vault);
         emit BatchDeposited(batchId_, batchAmount_, yTokens);
+    }
+
+    /**
+     * @notice called by anyone to refresh scholar numbers if learners have completed the course
+     * @param  _courseId courseId to be checked for possible new scholarship slots
+     */
+    function checkScholarships(uint256 _courseId) external {
+        // TODO: Loop through learnerData and make sure that any learners who have completed the course no longer take up scholar spots.
+    }
+
+    /**
+     * @notice handles learner registration if there are scholarship available
+     * @param  _courseId courseId the learner would like to register to
+     */
+    function registerScholar(uint256 _courseId) public {
+        require(
+            _courseId < courseIdTracker.current(),
+            "registerScholar: courseId does not exist"
+        );
+        uint256 scholarshipId_ = scholarshipIdTracker.current();
+        require(
+            learnerData[_courseId][msg.sender].blockRegistered == 0,
+            "registerScholar: already registered"
+        );
+        Course storage course = courses[_courseId];
+        require(
+            course.scholars > 0, 
+            "registerScholar: no scholarships available for this course"
+        );
+        course.scholars -= 1;
+        learnerData[_courseId][msg.sender].blockRegistered = block.number;
+        // TODO: is this acceptable to just reuse the yieldBatchId? Or do we need to alter learnerData to allow for the case of scholarships?
+        learnerData[_courseId][msg.sender].yieldBatchId = scholarshipId_;
+        emit LearnerRegistered(_courseId, msg.sender);
+    }
+
+    /**
+     * @notice allows donor to withdraw their scholarship donation at any point
+     * 
+     */
+    function withdrawScholarship() public {
+        // should check that msg.sender is the same address as the one who create a specific scholarshipId, if so, allow them to withdraw it all.
+        // Q: what happens if there are still learners registered for the course and the scholarship is withdrawn from under them?
+        // A: allow them to complete the course, but allow no new scholars after withdraw takes place.
     }
 
     /**
@@ -473,6 +572,11 @@ contract KernelFactory {
             eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
         }
         learnerDeposit[_courseId][msg.sender] -= eligibleAmount;
+    }
+
+    function getScholars(uint256 _courseId) external view returns (uint256) {
+        Course storage course = courses[_courseId];
+        return course.scholars;
     }
 
     function getCurrentBatchTotal() external view returns (uint256) {

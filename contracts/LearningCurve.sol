@@ -5,7 +5,7 @@ import "./ERC20.sol";
 import "./PRBMath.sol";
 import "./PRBMathUD60x18.sol";
 import "./SafeTransferLib.sol";
-interface DaiPermit {
+interface IERC20Permit {
 
     function permit(
         address holder,
@@ -81,7 +81,7 @@ contract LearningCurve is ERC20 {
      * @notice handles LEARN mint with an approval for DAI
      */
     function permitAndMint(uint256 _amount, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) external {
-        DaiPermit(address(reserve)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        IERC20Permit(address(reserve)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         mint(_amount);
     }
     /**

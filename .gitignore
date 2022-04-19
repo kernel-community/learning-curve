@@ -5,3 +5,6 @@
 /tests/__pycache__
 /tests-mainnet/__pycache__
 /scripts/__pycache__
+
+package-lock.json
+node_modules
