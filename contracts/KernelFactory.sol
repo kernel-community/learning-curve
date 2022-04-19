@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -389,6 +389,7 @@ contract KernelFactory {
             _amount,
             scholarsRemoved
         );
+        // TODO: make this actually work by withdrawing from the vault first, then sending to the scholarship provider
         stable.safeTransfer(msg.sender, _amount);
     }
 
