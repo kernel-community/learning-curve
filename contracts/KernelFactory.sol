@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -77,7 +77,6 @@ contract KernelFactory {
         uint256 checkpoints; // number of checkpoints the course should have
         uint256 fee; // the fee for entering the course
         uint256 checkpointBlockSpacing; // the block spacing between checkpoints
-        uint256 scholars; // the number of scholarships open for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
     }
@@ -86,12 +85,23 @@ contract KernelFactory {
         uint256 blockRegistered; // used to decide when a learner can claim their registration fee back
         uint256 yieldBatchId; // the batch id for this learner's Yield bearing deposit
         uint256 checkpointReached; // what checkpoint the learner has reached
+        bool isScholar;
+    }
+
+    struct Scholarship {
+        uint256 amount; // the amount provided for scholarships for this particular course
+        uint256 scholars; // the number of scholarships open for this course
+        address provider; // the address providing scholarships, used for withdrawals
     }
 
     // containing course data mapped by a courseId
     mapping(uint256 => Course) public courses;
     // containing learner data mapped by a courseId and address
     mapping(uint256 => mapping(address => Learner)) learnerData;
+    // containing scholarship data mapped by a scholarshipId
+    mapping(uint256 => Scholarship) public scholarships;
+    // containing scholarshipIds mapped by a courseId
+    mapping (uint256 => uint256) public courseScholarships;
 
     // containing the total underlying amount for a yield batch mapped by batchId
     mapping(uint256 => uint256) batchTotal;
@@ -100,8 +110,6 @@ contract KernelFactory {
     // containing the vault address of the the yield token for a yield batch mapped by batchId
     mapping(uint256 => address) batchYieldAddress;
 
-    // containing the total underlying amount for a yield scholarship mapped by scholarshipId
-    mapping(uint256 => uint256) scholarshipTotal;
     // containing the total amount of yield token for a yield scholarship mapped by scholarshipId
     mapping(uint256 => uint256) scholarshipYieldTotal;
     // containing the vault address of the the yield token for a yield scholarship mapped by scholarshipId
@@ -116,7 +124,7 @@ contract KernelFactory {
     Counters.Counter private courseIdTracker;
     // tracker for the batchId, current represents the current batch
     Counters.Counter private batchIdTracker;
-    // tracker for the scholarshipId, current represents the current batch
+    // tracker for the scholarshipId, current represents the current scholarship
     Counters.Counter private scholarshipIdTracker;
 
     // the stablecoin used by the contract, DAI
@@ -134,9 +142,16 @@ contract KernelFactory {
         string url,
         address creator
     );
-
-    event LearnerRegistered(uint256 indexed courseId, address learner);
-    event FeeRedeemed(uint256 courseId, address learner, uint256 amount);
+    event LearnerRegistered(
+        uint256 indexed courseId, 
+        address learner,
+        bool isScholar
+    );
+    event FeeRedeemed(
+        uint256 courseId, 
+        address learner, 
+        uint256 amount
+    );
     event LearnMintedFromCourse(
         uint256 courseId,
         address learner,
@@ -148,18 +163,27 @@ contract KernelFactory {
         uint256 batchAmount,
         uint256 batchYieldAmount
     );
-    event ScholarshipDeposited(
-        uint256 courseId,
+    event ScholarshipCreated(
         uint256 scholarshipId,
         uint256 scholarshipAmount,
+        uint256 numScholars,
+        address scholarshipProvider,
         uint256 scholarshipYieldAmount
+    );
+    event ScholarshipWithdrawn(
+        uint256 scholarshipId,
+        uint256 scholarshipAmount,
+        uint256 numScholars
     );
     event CheckpointUpdated(
         uint256 courseId,
         uint256 checkpointReached,
         address learner
     );
-    event YieldRewardRedeemed(address redeemer, uint256 yieldRewarded);
+    event YieldRewardRedeemed(
+        address redeemer, 
+        uint256 yieldRewarded
+    );
 
     constructor(
         address _stable,
@@ -205,7 +229,6 @@ contract KernelFactory {
             _checkpoints,
             _fee,
             _checkpointBlockSpacing,
-            0,
             _url,
             _creator
         );
@@ -246,13 +269,27 @@ contract KernelFactory {
         // mint y from the vault
         uint256 yTokens = vault.deposit(_amount);
         scholarshipYieldTotal[scholarshipId_] = yTokens;
-        // TODO: does this ensure that the courseCreator gets the yield? May need to add another line here.
-        scholarshipYieldAddress[scholarshipId_] = address(vault);
-        emit ScholarshipDeposited(_courseId, scholarshipId_, _amount, yTokens);
+        courseScholarships[_courseId] = scholarshipId_;
 
-        // calculate how many scholarships can be awarded based on amount
-        Course storage course = courses[_courseId];
-        course.scholars = _amount / course.fee;
+        Course memory course = courses[_courseId];
+        // TODO: how to ensure that the courseCreator can claim the yield?
+        scholarshipYieldAddress[scholarshipId_] = address(vault);
+        // calculate how many scholarships can be awarded based on amount provided
+        uint256 scholars = _amount / course.fee;
+        
+        scholarships[scholarshipId_] = Scholarship(
+            _amount,
+            scholars,
+            msg.sender
+        );
+
+        emit ScholarshipCreated(
+            scholarshipId_,
+            _amount,
+            scholars,
+            msg.sender, 
+            yTokens
+        );
     }
 
     /**
@@ -280,11 +317,19 @@ contract KernelFactory {
     }
 
     /**
-     * @notice called by anyone to refresh scholar numbers if learners have completed the course
+     * @notice called by anyone to refresh scholar numbers if previous scholars have completed the course
      * @param  _courseId courseId to be checked for possible new scholarship slots
      */
     function checkScholarships(uint256 _courseId) external {
-        // TODO: Loop through learnerData and make sure that any learners who have completed the course no longer take up scholar spots.
+        Course memory course = courses[_courseId]; 
+        uint256 courseDuration = course.checkpoints * course.checkpointBlockSpacing;
+
+        uint256 scholarshipId_ = courseScholarships[_courseId];
+        Scholarship storage scholarship = scholarships[scholarshipId_];
+        // TODO: Loop through all scholarships provided for this course and, 
+        // if block.number > learnerData[courseId_][scholar_address].blockRegistered + courseDuration
+        // scholarship.scholars ++;
+        // Question is: how to identify that scholar_address in a gas-efficient way?
     }
 
     /**
@@ -296,31 +341,55 @@ contract KernelFactory {
             _courseId < courseIdTracker.current(),
             "registerScholar: courseId does not exist"
         );
-        uint256 scholarshipId_ = scholarshipIdTracker.current();
         require(
             learnerData[_courseId][msg.sender].blockRegistered == 0,
             "registerScholar: already registered"
         );
-        Course storage course = courses[_courseId];
+        uint256 scholarshipId_ = courseScholarships[_courseId];
+        Scholarship storage scholarship = scholarships[scholarshipId_];
         require(
-            course.scholars > 0, 
+            scholarship.scholars > 0, 
             "registerScholar: no scholarships available for this course"
         );
-        course.scholars -= 1;
+        scholarship.scholars -= 1;
+
         learnerData[_courseId][msg.sender].blockRegistered = block.number;
-        // TODO: is this acceptable to just reuse the yieldBatchId? Or do we need to alter learnerData to allow for the case of scholarships?
-        learnerData[_courseId][msg.sender].yieldBatchId = scholarshipId_;
-        emit LearnerRegistered(_courseId, msg.sender);
+        learnerData[_courseId][msg.sender].isScholar = true;
+        
+        emit LearnerRegistered(
+            _courseId, 
+            msg.sender,
+            true
+        );
     }
 
     /**
-     * @notice allows donor to withdraw their scholarship donation at any point
-     * 
+     * @notice allows donor to withdraw their scholarship donation, or a portion thereof, at any point
+     *         Q: what happens if there are still learners registered for the course and the scholarship is withdrawn from under them?
+     *         A: allow them to complete the course, but allow no new scholars after withdraw takes place.       
+     * @param _courseId the id of the course from which the scholarship is to be withdrawn.
      */
-    function withdrawScholarship() public {
-        // should check that msg.sender is the same address as the one who create a specific scholarshipId, if so, allow them to withdraw it all.
-        // Q: what happens if there are still learners registered for the course and the scholarship is withdrawn from under them?
-        // A: allow them to complete the course, but allow no new scholars after withdraw takes place.
+    function withdrawScholarship(uint256 _courseId, uint256 _amount) public {
+        uint256 scholarshipId_ = courseScholarships[_courseId];
+        Scholarship storage scholarship = scholarships[scholarshipId_];
+        require(
+            // TODO: will this be fine if the sender is a multisig?
+            msg.sender == scholarship.provider,
+            "withdrawScholarship: caller must be scholarshipProvider"
+        );
+        require(
+            scholarship.amount <= _amount,
+            "withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"
+        );
+        Course memory course =  courses[_courseId];
+        uint256 scholarsRemoved = course.fee / _amount;
+        scholarship.scholars -= scholarsRemoved;
+        emit ScholarshipWithdrawn(
+            scholarshipId_,
+            _amount,
+            scholarsRemoved
+        );
+        stable.safeTransfer(msg.sender, _amount);
     }
 
     /**
@@ -346,7 +415,11 @@ contract KernelFactory {
         batchTotal[batchId_] += course.fee;
         learnerDeposit[batchId_][msg.sender] += course.fee;
 
-        emit LearnerRegistered(_courseId, msg.sender);
+        emit LearnerRegistered(
+            _courseId, 
+            msg.sender,
+            false
+        );
     }
     /**
      * @notice handles learner registration with permit for approval
@@ -575,8 +648,9 @@ contract KernelFactory {
     }
 
     function getScholars(uint256 _courseId) external view returns (uint256) {
-        Course storage course = courses[_courseId];
-        return course.scholars;
+        uint256 scholarshipId_ = courseScholarships[_courseId];
+        Scholarship memory scholarship = scholarships[scholarshipId_];
+        return scholarship.scholars;
     }
 
     function getCurrentBatchTotal() external view returns (uint256) {
