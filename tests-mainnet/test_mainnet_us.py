@@ -7,76 +7,76 @@ from eth_utils import encode_hex
 
 
 def test_register_permit(contracts_with_courses, learners, token, deployer):
-    kernel, learning_curve = contracts_with_courses
+    unschool, learning_curve = contracts_with_courses
     signer = Account.create()
     holder = signer.address
     token.transfer(holder, constants_mainnet.FEE, {"from": deployer})
     assert token.balanceOf(holder) == constants_mainnet.FEE
-    permit = build_permit(holder, str(kernel), token, 3600)
+    permit = build_permit(holder, str(unschool), token, 3600)
     signed = signer.sign_message(permit)
-    print(token.balanceOf(kernel.address))
-    tx = kernel.permitAndRegister(0, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
-    print(token.balanceOf(kernel.address))
+    print(token.balanceOf(unschool.address))
+    tx = unschool.permitAndRegister(0, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
+    print(token.balanceOf(unschool.address))
     assert "LearnerRegistered" in tx.events
     assert tx.events["LearnerRegistered"]["courseId"] == 0
 
 
 def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
-    kernel, learning_curve = contracts_with_learners
-    tx = kernel.batchDeposit({"from": keeper})
+    unschool, learning_curve = contracts_with_learners
+    tx = unschool.batchDeposit({"from": keeper})
     for m in range(constants_mainnet.CHECKPOINTS):
         brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
         gen_lev_strat.harvest({"from": keeper})
         for n, learner in enumerate(learners):
             dai_balance = constants_mainnet.FEE / constants_mainnet.CHECKPOINTS
-            redeemable_dai = kernel.getLearnerCourseEligibleFunds(learner, 0)
+            redeemable_dai = unschool.getLearnerCourseEligibleFunds(learner, 0)
             mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
             lc_dai_balance = token.balanceOf(learning_curve)
-            kf_ydai_balance = ydai.balanceOf(kernel)
+            us_ydai_balance = ydai.balanceOf(unschool)
             learner_lc_balance = learning_curve.balanceOf(learner)
-            tx = kernel.mint(0, {"from": learner})
+            tx = unschool.mint(0, {"from": learner})
             assert "LearnMintedFromCourse" in tx.events
             assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
             assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - dai_balance) < constants_mainnet.ACCURACY_Y
-            assert kernel.verify(learner, 0) == m + 1
+            assert unschool.verify(learner, 0) == m + 1
             assert (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * m) > \
-                   kernel.getLearnerCourseFundsRemaining(learner, 0) > \
+                   unschool.getLearnerCourseFundsRemaining(learner, 0) > \
                    (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * (m + 2))
-            assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
+            assert unschool.getLearnerCourseEligibleFunds(learner, 0) == 0
             assert abs(token.balanceOf(learning_curve) - (lc_dai_balance + dai_balance)) < constants_mainnet.ACCURACY_Y
-            assert ydai.balanceOf(kernel) < kf_ydai_balance
+            assert ydai.balanceOf(unschool) < us_ydai_balance
             assert abs(learning_curve.balanceOf(learner) - (learner_lc_balance + mintable_balance)) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(kernel) == kernel.getYieldRewards(steward)
-    assert ydai.balanceOf(kernel) < 1000
+    assert token.balanceOf(unschool) == unschool.getYieldRewards(steward)
+    assert ydai.balanceOf(unschool) < 1000
 
 
 def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_lev_strat, ydai):
-    kernel, learning_curve = contracts_with_learners
+    unschool, learning_curve = contracts_with_learners
     brownie.chain.mine(constants_mainnet.CHECKPOINTS * constants_mainnet.CHECKPOINT_BLOCK_SPACING)
-    tx = kernel.batchDeposit({"from": keeper})
+    tx = unschool.batchDeposit({"from": keeper})
     brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
     brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
     for n, learner in enumerate(learners):
-        dai_balance = kernel.getLearnerCourseEligibleFunds(learner, 0)
-        kf_ydai_balance = ydai.balanceOf(kernel)
-        tx = kernel.redeem(0, {"from": learner})
+        dai_balance = unschool.getLearnerCourseEligibleFunds(learner, 0)
+        us_ydai_balance = ydai.balanceOf(unschool)
+        tx = unschool.redeem(0, {"from": learner})
         assert "FeeRedeemed" in tx.events
         assert tx.events["FeeRedeemed"]["amount"] == constants_mainnet.FEE
-        assert kernel.verify(learner, 0) == constants_mainnet.CHECKPOINTS
-        assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
+        assert unschool.verify(learner, 0) == constants_mainnet.CHECKPOINTS
+        assert unschool.getLearnerCourseEligibleFunds(learner, 0) == 0
         assert token.balanceOf(steward) == 0
-        assert kernel.getYieldRewards(steward, {"from": steward}) > 0
-        assert ydai.balanceOf(kernel) < kf_ydai_balance
+        assert unschool.getYieldRewards(steward, {"from": steward}) > 0
+        assert ydai.balanceOf(unschool) < us_ydai_balance
         assert token.balanceOf(learner) == constants_mainnet.FEE
         assert token.balanceOf(learning_curve) == 1e18
         assert ydai.balanceOf(learning_curve) == 0
-    kt_redemption = kernel.getYieldRewards(steward, {"from": steward})
-    kernel.withdrawYieldRewards({"from": steward})
-    assert kernel.getYieldRewards(steward, {"from": steward}) == 0
+    kt_redemption = unschool.getYieldRewards(steward, {"from": steward})
+    unschool.withdrawYieldRewards({"from": steward})
+    assert unschool.getYieldRewards(steward, {"from": steward}) == 0
     assert token.balanceOf(steward) == kt_redemption
-    assert token.balanceOf(kernel) == 0
-    assert ydai.balanceOf(kernel) < 1000
+    assert token.balanceOf(unschool) == 0
+    assert ydai.balanceOf(unschool) < 1000
 
 
 def test_redeem_diff_checkpoints(
@@ -88,37 +88,37 @@ def test_redeem_diff_checkpoints(
         gen_lev_strat,
         ydai
 ):
-    kernel, learning_curve = contracts_with_learners
-    tx = kernel.batchDeposit({"from": keeper})
+    unschool, learning_curve = contracts_with_learners
+    tx = unschool.batchDeposit({"from": keeper})
     for m in range(constants_mainnet.CHECKPOINTS):
         brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
         brownie.chain.sleep(100)
         gen_lev_strat.harvest({"from": keeper})
         for n, learner in enumerate(learners):
-            dai_balance = kernel.getLearnerCourseEligibleFunds(learner, 0)
-            kt_dai_balance = kernel.getYieldRewards(steward, {"from": steward})
-            kf_ydai_balance = ydai.balanceOf(kernel)
-            tx = kernel.redeem(0, {"from": learner})
+            dai_balance = unschool.getLearnerCourseEligibleFunds(learner, 0)
+            kt_dai_balance = unschool.getYieldRewards(steward, {"from": steward})
+            us_ydai_balance = ydai.balanceOf(unschool)
+            tx = unschool.redeem(0, {"from": learner})
             assert "FeeRedeemed" in tx.events
             assert abs(tx.events["FeeRedeemed"]["amount"] - dai_balance) - \
-                   (kernel.getYieldRewards(steward, {"from": steward}) - kt_dai_balance) \
+                   (unschool.getYieldRewards(steward, {"from": steward}) - kt_dai_balance) \
                    < constants_mainnet.ACCURACY_Y
-            assert kernel.verify(learner, 0) == m + 1
+            assert unschool.verify(learner, 0) == m + 1
             assert (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * m) > \
-                   kernel.getLearnerCourseFundsRemaining(learner, 0) > \
+                   unschool.getLearnerCourseFundsRemaining(learner, 0) > \
                    (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * (m + 2))
-            assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
-            assert kernel.getYieldRewards(steward, {"from": steward}) > kt_dai_balance
-            assert ydai.balanceOf(kernel) < kf_ydai_balance
+            assert unschool.getLearnerCourseEligibleFunds(learner, 0) == 0
+            assert unschool.getYieldRewards(steward, {"from": steward}) > kt_dai_balance
+            assert ydai.balanceOf(unschool) < us_ydai_balance
             assert token.balanceOf(learning_curve) == 1e18
             assert ydai.balanceOf(learning_curve) == 0
 
-    kt_redemption = kernel.getYieldRewards(steward, {"from": steward})
-    kernel.withdrawYieldRewards({"from": steward})
-    assert kernel.getYieldRewards(steward, {"from": steward}) == 0
+    kt_redemption = unschool.getYieldRewards(steward, {"from": steward})
+    unschool.withdrawYieldRewards({"from": steward})
+    assert unschool.getYieldRewards(steward, {"from": steward}) == 0
     assert token.balanceOf(steward) == kt_redemption
-    assert token.balanceOf(kernel) == 0
-    assert ydai.balanceOf(kernel) < 1000
+    assert token.balanceOf(unschool) == 0
+    assert ydai.balanceOf(unschool) < 1000
 
 
 def test_batch_success(
@@ -128,61 +128,61 @@ def test_batch_success(
         ydai,
         learners
 ):
-    kernel, learning_curve = contracts_with_learners
-    kf_balance_before = token.balanceOf(kernel)
-    batch_id_before = kernel.getCurrentBatchId()
-    tx = kernel.batchDeposit({"from": keeper})
+    unschool, learning_curve = contracts_with_learners
+    us_balance_before = token.balanceOf(unschool)
+    batch_id_before = unschool.getCurrentBatchId()
+    tx = unschool.batchDeposit({"from": keeper})
     assert "BatchDeposited" in tx.events
     assert batch_id_before == \
            0 == \
            tx.events["BatchDeposited"]["batchId"] == \
-           kernel.getCurrentBatchId() - 1
-    assert token.balanceOf(kernel) == 0
-    assert kf_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.FEE * len(learners)
-    assert ydai.balanceOf(kernel) > 0
-    assert ydai.balanceOf(kernel) == tx.events["BatchDeposited"]["batchYieldAmount"]
+           unschool.getCurrentBatchId() - 1
+    assert token.balanceOf(unschool) == 0
+    assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.FEE * len(learners)
+    assert ydai.balanceOf(unschool) > 0
+    assert ydai.balanceOf(unschool) == tx.events["BatchDeposited"]["batchYieldAmount"]
 
 
 def test_batch_malicious(contracts_with_courses, keeper):
-    kernel, learning_curve = contracts_with_courses
+    unschool, learning_curve = contracts_with_courses
     with brownie.reverts("batchDeposit: no funds to deposit"):
-        kernel.batchDeposit({"from": keeper})
+        unschool.batchDeposit({"from": keeper})
 
 
 def test_register_diff_batches(contracts_with_courses, keeper, token, learners, deployer, ydai):
-    kernel, learning_curve = contracts_with_courses
+    unschool, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
         token.transfer(
             learner,
             constants_mainnet.FEE,
             {"from": deployer}
         )
-        token.approve(kernel, constants_mainnet.FEE, {"from": learner})
-        before_bal = token.balanceOf(kernel)
-        tx = kernel.register(0, {"from": learner})
+        token.approve(unschool, constants_mainnet.FEE, {"from": learner})
+        before_bal = token.balanceOf(unschool)
+        tx = unschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_mainnet.FEE == token.balanceOf(kernel)
-        kf_balance_before = token.balanceOf(kernel)
-        batch_id_before = kernel.getCurrentBatchId()
-        ydai_bal_before = ydai.balanceOf(kernel)
-        tx = kernel.batchDeposit({"from": keeper})
+        assert before_bal + constants_mainnet.FEE == token.balanceOf(unschool)
+        us_balance_before = token.balanceOf(unschool)
+        batch_id_before = unschool.getCurrentBatchId()
+        ydai_bal_before = ydai.balanceOf(unschool)
+        tx = unschool.batchDeposit({"from": keeper})
         assert "BatchDeposited" in tx.events
         assert batch_id_before == \
                n == \
                tx.events["BatchDeposited"]["batchId"] == \
-               kernel.getCurrentBatchId() - 1
-        assert token.balanceOf(kernel) == 0
-        assert kf_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.FEE
-        assert ydai.balanceOf(kernel) > ydai_bal_before
-        assert ydai.balanceOf(kernel) - ydai_bal_before == tx.events["BatchDeposited"]["batchYieldAmount"]
+               unschool.getCurrentBatchId() - 1
+        assert token.balanceOf(unschool) == 0
+        assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.FEE
+        assert ydai.balanceOf(unschool) > ydai_bal_before
+        assert ydai.balanceOf(unschool) - ydai_bal_before == tx.events["BatchDeposited"]["batchYieldAmount"]
 
 
 def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
-    kernel, learning_curve = contracts_with_learners
+    unschool, learning_curve = contracts_with_learners
     brownie.chain.mine(constants_mainnet.CHECKPOINTS * constants_mainnet.CHECKPOINT_BLOCK_SPACING)
-    tx = kernel.batchDeposit({"from": keeper})
+    tx = unschool.batchDeposit({"from": keeper})
     brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
     brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
@@ -191,27 +191,27 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
         dai_balance = constants_mainnet.FEE
         mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
         lc_dai_balance = token.balanceOf(learning_curve)
-        kf_dai_balance = token.balanceOf(kernel)
+        us_dai_balance = token.balanceOf(unschool)
         learner_lc_balance = learning_curve.balanceOf(learner)
-        tx = kernel.mint(0, {"from": learner})
+        tx = unschool.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
         assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
         assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - dai_balance) < constants_mainnet.ACCURACY_Y
-        assert kernel.verify(learner, 0) == constants_mainnet.CHECKPOINTS
-        assert kernel.getLearnerCourseEligibleFunds(learner, 0) == 0
+        assert unschool.verify(learner, 0) == constants_mainnet.CHECKPOINTS
+        assert unschool.getLearnerCourseEligibleFunds(learner, 0) == 0
         assert abs(token.balanceOf(learning_curve) - lc_dai_balance - dai_balance) < constants_mainnet.ACCURACY_Y
-        assert abs(token.balanceOf(kernel) - kernel.getYieldRewards(steward)) < constants_mainnet.ACCURACY
+        assert abs(token.balanceOf(unschool) - unschool.getYieldRewards(steward)) < constants_mainnet.ACCURACY
         assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(kernel) == kernel.getYieldRewards(steward)
-    assert ydai.balanceOf(kernel) < 1000
+    assert token.balanceOf(unschool) == unschool.getYieldRewards(steward)
+    assert ydai.balanceOf(unschool) < 1000
 
 
 def test_verify(contracts_with_learners, learners, keeper):
-    kernel, learning_curve = contracts_with_learners
+    unschool, learning_curve = contracts_with_learners
     learner = learners[0]
-    tx = kernel.batchDeposit({"from": keeper})
+    tx = unschool.batchDeposit({"from": keeper})
     for n in range(constants_mainnet.CHECKPOINTS + 1):
-        assert kernel.verify(learner, 0, {"from": learner}) == n
+        assert unschool.verify(learner, 0, {"from": learner}) == n
         brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
 
 

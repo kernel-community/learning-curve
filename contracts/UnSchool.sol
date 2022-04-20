@@ -64,12 +64,12 @@ interface IERC20Permit {
     function approve(address usr, uint256 wad) external returns (bool);
 }
 /**
- * @title Kernel Factory
+ * @title UnSchool
  * @author kjr217
  * @notice Deploys new courses and interacts with the learning curve directly to mint LEARN.
  */
 
-contract KernelFactory {
+contract UnSchool {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -85,7 +85,6 @@ contract KernelFactory {
         uint256 blockRegistered; // used to decide when a learner can claim their registration fee back
         uint256 yieldBatchId; // the batch id for this learner's Yield bearing deposit
         uint256 checkpointReached; // what checkpoint the learner has reached
-        bool isScholar;
     }
 
     struct Scholarship {
@@ -144,8 +143,7 @@ contract KernelFactory {
     );
     event LearnerRegistered(
         uint256 indexed courseId, 
-        address learner,
-        bool isScholar
+        address learner
     );
     event FeeRedeemed(
         uint256 courseId, 
@@ -354,12 +352,10 @@ contract KernelFactory {
         scholarship.scholars -= 1;
 
         learnerData[_courseId][msg.sender].blockRegistered = block.number;
-        learnerData[_courseId][msg.sender].isScholar = true;
         
         emit LearnerRegistered(
             _courseId, 
-            msg.sender,
-            true
+            msg.sender
         );
     }
 
@@ -423,8 +419,7 @@ contract KernelFactory {
 
         emit LearnerRegistered(
             _courseId, 
-            msg.sender,
-            false
+            msg.sender
         );
     }
     /**

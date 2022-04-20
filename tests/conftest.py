@@ -1,7 +1,7 @@
 import pytest
 import constants_unit
 from brownie import (
-    KernelFactory,
+    UnSchool,
     LearningCurve,
     Dai,
 )
@@ -26,7 +26,7 @@ def contracts(deployer, token):
     learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
     token.approve(learning_curve, 1e18, {"from": deployer})
     learning_curve.initialise({"from": deployer})
-    yield KernelFactory.deploy(
+    yield UnSchool.deploy(
         token.address,
         learning_curve.address,
         constants_unit.REGISTRY,
@@ -36,9 +36,9 @@ def contracts(deployer, token):
 
 @pytest.fixture(scope="function")
 def contracts_with_courses(contracts, steward):
-    kernel, learning_curve = contracts
+    unschool, learning_curve = contracts
     for n in range(5):
-        tx = kernel.createCourse(
+        tx = unschool.createCourse(
         constants_unit.FEE,
         constants_unit.CHECKPOINTS,
         constants_unit.CHECKPOINT_BLOCK_SPACING,
@@ -46,17 +46,17 @@ def contracts_with_courses(contracts, steward):
         constants_unit.CREATOR,
         {"from": steward}
         )
-    yield kernel, learning_curve
+    yield unschool, learning_curve
 
 
 @pytest.fixture(scope="function")
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
-    kernel, learning_curve = contracts_with_courses
+    unschool, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
         token.transfer(learner, constants_unit.FEE, {"from": deployer})
-        token.approve(kernel, constants_unit.FEE, {"from": learner})
-        kernel.register(0, {"from": learner})
-    yield kernel, learning_curve
+        token.approve(unschool, constants_unit.FEE, {"from": learner})
+        unschool.register(0, {"from": learner})
+    yield unschool, learning_curve
 
 
 @pytest.fixture
