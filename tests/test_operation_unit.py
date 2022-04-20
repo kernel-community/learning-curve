@@ -3,9 +3,9 @@ import constants_unit
 
 
 def test_full(deployer, learners, steward, contracts, token):
-    unschool, learning_curve = contracts
+    deschool, learning_curve = contracts
 
-    tx = unschool.createCourse(
+    tx = deschool.createCourse(
         constants_unit.FEE,
         constants_unit.CHECKPOINTS,
         constants_unit.CHECKPOINT_BLOCK_SPACING,
@@ -28,23 +28,23 @@ def test_full(deployer, learners, steward, contracts, token):
             constants_unit.FEE,
             {"from": deployer}
         )
-        token.approve(unschool, constants_unit.FEE, {"from": learner})
-        before_bal = token.balanceOf(unschool)
-        tx = unschool.register(0, {"from": learner})
+        token.approve(deschool, constants_unit.FEE, {"from": learner})
+        before_bal = token.balanceOf(deschool)
+        tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_unit.FEE == token.balanceOf(unschool)
+        assert before_bal + constants_unit.FEE == token.balanceOf(deschool)
 
-    assert unschool.getCurrentBatchTotal() == constants_unit.FEE * len(learners)
-    assert token.balanceOf(unschool) == constants_unit.FEE * len(learners)
+    assert deschool.getCurrentBatchTotal() == constants_unit.FEE * len(learners)
+    assert token.balanceOf(deschool) == constants_unit.FEE * len(learners)
 
     brownie.chain.mine(500)
 
-    assert unschool.verify(learners[0], 0, {"from": steward}) == constants_unit.CHECKPOINTS
+    assert deschool.verify(learners[0], 0, {"from": steward}) == constants_unit.CHECKPOINTS
 
     for n, learner in enumerate(learners):
-        tx = unschool.mint(0, {"from": learner})
+        tx = deschool.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI collateral: " + str(token.balanceOf(learning_curve)))

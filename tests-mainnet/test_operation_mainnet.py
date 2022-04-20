@@ -13,9 +13,9 @@ def test_full_mint(
         ydai,
         gen_lev_strat
 ):
-    unschool, learning_curve = contracts
+    deschool, learning_curve = contracts
 
-    tx = unschool.createCourse(
+    tx = deschool.createCourse(
         constants_mainnet.FEE,
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
@@ -31,7 +31,7 @@ def test_full_mint(
     assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
     assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
     assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
-    assert unschool.getNextCourseId() == 1
+    assert deschool.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
         dai.transfer(
@@ -39,29 +39,29 @@ def test_full_mint(
             constants_mainnet.FEE,
             {"from": deployer}
         )
-        dai.approve(unschool, constants_mainnet.FEE, {"from": learner})
-        before_bal = dai.balanceOf(unschool)
-        tx = unschool.register(0, {"from": learner})
+        dai.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        before_bal = dai.balanceOf(deschool)
+        tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_mainnet.FEE == dai.balanceOf(unschool)
+        assert before_bal + constants_mainnet.FEE == dai.balanceOf(deschool)
 
-    assert unschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
-    assert dai.balanceOf(unschool) == constants_mainnet.FEE * len(learners)
-    tx = unschool.batchDeposit({"from": kernelTreasury})
+    assert deschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
+    assert dai.balanceOf(deschool) == constants_mainnet.FEE * len(learners)
+    tx = deschool.batchDeposit({"from": kernelTreasury})
     brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
     gen_lev_strat.harvest({"from": keeper})
-    assert dai.balanceOf(unschool) == 0
-    assert unschool.getCurrentBatchId() == 1
-    assert ydai.balanceOf(unschool) > 0
-    assert unschool.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
+    assert dai.balanceOf(deschool) == 0
+    assert deschool.getCurrentBatchId() == 1
+    assert ydai.balanceOf(deschool) > 0
+    assert deschool.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
     print("----- MINT -----")
     for n, learner in enumerate(learners):
-        tx = unschool.mint(0, {"from": learner})
+        tx = deschool.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
-        print("YDAI Balance: " + str(ydai.balanceOf(unschool)))
+        print("YDAI Balance: " + str(ydai.balanceOf(deschool)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))
         print('\n')
@@ -97,9 +97,9 @@ def test_full_redeem(
         ydai,
         gen_lev_strat
 ):
-    unschool, learning_curve = contracts
+    deschool, learning_curve = contracts
 
-    tx = unschool.createCourse(
+    tx = deschool.createCourse(
         constants_mainnet.FEE,
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
@@ -113,7 +113,7 @@ def test_full_redeem(
     assert tx.events["CourseCreated"]["checkpoints"] == constants_mainnet.CHECKPOINTS
     assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
     assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
-    assert unschool.getNextCourseId() == 1
+    assert deschool.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
         dai.transfer(
@@ -121,33 +121,33 @@ def test_full_redeem(
             constants_mainnet.FEE,
             {"from": deployer}
         )
-        dai.approve(unschool, constants_mainnet.FEE, {"from": learner})
-        before_bal = dai.balanceOf(unschool)
-        tx = unschool.register(0, {"from": learner})
+        dai.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        before_bal = dai.balanceOf(deschool)
+        tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_mainnet.FEE == dai.balanceOf(unschool)
+        assert before_bal + constants_mainnet.FEE == dai.balanceOf(deschool)
 
-    assert unschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
-    assert dai.balanceOf(unschool) == constants_mainnet.FEE * len(learners)
-    tx = unschool.batchDeposit({"from": kernelTreasury})
-    assert dai.balanceOf(unschool) == 0
-    assert unschool.getCurrentBatchId() == 1
-    assert ydai.balanceOf(unschool) > 0
+    assert deschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
+    assert dai.balanceOf(deschool) == constants_mainnet.FEE * len(learners)
+    tx = deschool.batchDeposit({"from": kernelTreasury})
+    assert dai.balanceOf(deschool) == 0
+    assert deschool.getCurrentBatchId() == 1
+    assert ydai.balanceOf(deschool) > 0
     brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 2)
     gen_lev_strat.harvest({"from": keeper})
     brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 3)
 
-    assert unschool.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
+    assert deschool.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
     print("----- REDEEM -----")
     for n, learner in enumerate(learners):
-        tx = unschool.redeem(0, {"from": learner})
+        tx = deschool.redeem(0, {"from": learner})
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("Learner " + str(n) + " dai balance: " + str(dai.balanceOf(learner)))
-        print("YDAI Balance: " + str(ydai.balanceOf(unschool)))
+        print("YDAI Balance: " + str(ydai.balanceOf(deschool)))
         print("redeemable DAI Balance of Creator: " +
-              str(unschool.getYieldRewards(kernelTreasury, {"from": kernelTreasury}))
+              str(deschool.getYieldRewards(kernelTreasury, {"from": kernelTreasury}))
               )
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))

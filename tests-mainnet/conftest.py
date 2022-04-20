@@ -2,7 +2,7 @@ import pytest
 import time
 import constants_mainnet
 from brownie import (
-    UnSchool,
+    DeSchool,
     LearningCurve,
     accounts,
     web3,
@@ -30,7 +30,7 @@ def contracts(deployer, dai):
     dai.transfer(deployer, 1e18, {"from": deployer})
     dai.approve(learning_curve, 1e18, {"from": deployer})
     learning_curve.initialise({"from": deployer})
-    yield UnSchool.deploy(
+    yield DeSchool.deploy(
         dai.address,
         learning_curve.address,
         constants_mainnet.REGISTRY,
@@ -40,9 +40,9 @@ def contracts(deployer, dai):
 
 @pytest.fixture(scope="function")
 def contracts_with_courses(contracts, steward):
-    unschool, learning_curve = contracts
+    deschool, learning_curve = contracts
     for n in range(5):
-        tx = unschool.createCourse(
+        tx = deschool.createCourse(
         constants_mainnet.FEE,
         constants_mainnet.CHECKPOINTS,
         constants_mainnet.CHECKPOINT_BLOCK_SPACING,
@@ -50,17 +50,17 @@ def contracts_with_courses(contracts, steward):
         steward,
         {"from": steward}
         )
-    yield unschool, learning_curve
+    yield deschool, learning_curve
 
 
 @pytest.fixture(scope="function")
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
-    unschool, learning_curve = contracts_with_courses
+    deschool, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
         token.transfer(learner, constants_mainnet.FEE, {"from": deployer})
-        token.approve(unschool, constants_mainnet.FEE, {"from": learner})
-        unschool.register(0, {"from": learner})
-    yield unschool, learning_curve
+        token.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        deschool.register(0, {"from": learner})
+    yield deschool, learning_curve
 
 
 @pytest.fixture

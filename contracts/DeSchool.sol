@@ -64,12 +64,12 @@ interface IERC20Permit {
     function approve(address usr, uint256 wad) external returns (bool);
 }
 /**
- * @title UnSchool
+ * @title DeSchool
  * @author kjr217
  * @notice Deploys new courses and interacts with the learning curve directly to mint LEARN.
  */
 
-contract UnSchool {
+contract DeSchool {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
