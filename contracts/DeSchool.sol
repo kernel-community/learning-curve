@@ -87,7 +87,7 @@ contract DeSchool {
     }
 
     struct Scholar {
-        uint256 blockRegistered; // used to decide when a new scholarship can be made available
+        address scholar; // used to decide when a new scholarship can be made available
     }
 
     struct Learner {
@@ -103,8 +103,8 @@ contract DeSchool {
 
     // containing learner data mapped by a courseId and address
     mapping(uint256 => mapping(address => Learner)) learnerData;
-    // containing scholar data mapped by a courseId and address
-    mapping(uint256 => mapping(address => Scholar)) scholarData;
+    // containing scholar data mapped by a courseId and blockRegistered
+    mapping(uint256 => mapping(uint256 => Scholar)) scholarData;
     // containing scholarship provider data mapped by courseId and address
     mapping(uint256 => mapping(address => Provider)) providerData;
     
@@ -321,14 +321,19 @@ contract DeSchool {
      * @param  _courseId courseId to be checked for possible new scholarship slots. Used here because we don't expect UIs to store scholarshipIds,
      *                   only courseIds.
      */
-    function checkScholarships(uint256 _courseId) external {
+    function checkScholarships(uint256 _courseId) external returns (uint256 scholars) {
         Course memory course = courses[_courseId]; 
         uint256 courseDuration = course.checkpoints * course.checkpointBlockSpacing;
-        
-        // TODO: Loop through all scholarships provided for this course and, 
-        // if block.number > scholarData[courseId_][scholar_address].blockRegistered + courseDuration
-        // scholarship.scholars ++;
-        // Question is: how to identify that scholar_address in a gas-efficient way?
+        uint256 finishedScholars = block.number - courseDuration;
+
+        for (uint256 i; i < scholarData[_courseId].length; i++) {
+            if (scholarData[_courseId][finishedScholars]) {
+                course.scholars ++;
+            } else {
+                return course.scholars;
+            }
+        }
+        return course.scholars;
     }
 
     /**
@@ -351,7 +356,7 @@ contract DeSchool {
         );
         course.scholars -= 1;
 
-        scholarData[_courseId][msg.sender].blockRegistered = block.number;
+        scholarData[_courseId][block.number].scholar = msg.sender;
         
         emit ScholarRegistered(
             _courseId, 
