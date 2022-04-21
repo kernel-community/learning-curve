@@ -74,6 +74,7 @@ contract DeSchool {
     using Counters for Counters.Counter;
 
     struct Course {
+        uint256 beginBlock;
         uint256 checkpoints; // number of checkpoints the course should have
         uint256 fee; // the fee for entering the course
         uint256 checkpointBlockSpacing; // the block spacing between checkpoints
@@ -88,6 +89,7 @@ contract DeSchool {
 
     struct Scholar {
         address scholar; // used to decide when a new scholarship can be made available
+        bool completed; //used to ensure same address cannot claim scholarship twice
     }
 
     struct Learner {
@@ -107,6 +109,8 @@ contract DeSchool {
     mapping(uint256 => mapping(uint256 => Scholar)) scholarData;
     // containing scholarship provider data mapped by courseId and address
     mapping(uint256 => mapping(address => Provider)) providerData;
+    // containg previousScholar data mapped by a courseId and address
+    mapping(uint256 => mapping(address => Scholar)) previousScholar;
     
 
     // containing the total underlying amount for a yield batch mapped by batchId
@@ -130,8 +134,6 @@ contract DeSchool {
     Counters.Counter private courseIdTracker;
     // tracker for the batchId, current represents the current batch
     Counters.Counter private batchIdTracker;
-    // tracker for the scholarshipId, current represents the current scholarship
-    Counters.Counter private scholarshipIdTracker;
 
     // the stablecoin used by the contract, DAI
     IERC20 public stable;
@@ -142,6 +144,7 @@ contract DeSchool {
 
     event CourseCreated(
         uint256 indexed courseId,
+        uint256 beginBlock,
         uint256 checkpoints,
         uint256 fee,
         uint256 checkpointBlockSpacing,
@@ -234,6 +237,7 @@ contract DeSchool {
         uint256 courseId_ = courseIdTracker.current();
         courseIdTracker.increment();
         courses[courseId_] = Course(
+            block.number,
             _checkpoints,
             _fee,
             _checkpointBlockSpacing,
@@ -243,6 +247,7 @@ contract DeSchool {
         );
         emit CourseCreated(
             courseId_,
+            block.number,
             _checkpoints,
             _fee,
             _checkpointBlockSpacing,
@@ -267,8 +272,6 @@ contract DeSchool {
             "createScholarships: courseId does not exist"
         );
 
-        // initiate the next scholarship
-        scholarshipIdTracker.increment();
         // get the address of the vault from the yRegistry
         I_Vault vault = I_Vault(registry.latestVault(address(stable)));
         // approve the vault
@@ -283,11 +286,13 @@ contract DeSchool {
 
         // calculate how many scholarships can be awarded based on amount provided
         Course memory course = courses[_courseId];
-        course.scholars += _amount / course.fee;
+        uint256 newScholars = _amount / course.fee;
+        course.scholars += newScholars;
 
         emit ScholarshipCreated(
             _courseId,
             _amount,
+            newScholars,
             msg.sender
         );
     }
@@ -326,9 +331,12 @@ contract DeSchool {
         uint256 courseDuration = course.checkpoints * course.checkpointBlockSpacing;
         uint256 finishedBlock = block.number - courseDuration;
 
-        for (uint256 i; i < scholarData[_courseId].length; i++) {
-            if (scholarData[_courseId][finishedBlock].scholar != address(0)) {
-                course.scholars ++;
+        for (uint256 i; i < course.scholars; i++) {
+            for (uint256 j = course.beginBlock; j < finishedBlock; j++) {
+                if (scholarData[_courseId][j].scholar != address(0)) {
+                    scholarData[_courseId][j].completed = true;
+                    course.scholars ++;
+                }
             }
         }
         return course.scholars;
@@ -344,8 +352,8 @@ contract DeSchool {
             "registerScholar: courseId does not exist"
         );
         require(
-            scholarData[_courseId][msg.sender].blockRegistered == 0,
-            "registerScholar: already registered"
+            !previousScholar[_courseId][msg.sender].completed,
+            "registerScholar: already registered previously"
         );
         Course storage course = courses[_courseId];
         require(
@@ -645,9 +653,8 @@ contract DeSchool {
     }
 
     function getScholars(uint256 _courseId) external view returns (uint256) {
-        uint256 scholarshipId_ = courseScholarships[_courseId];
-        Scholarship memory scholarship = scholarships[scholarshipId_];
-        return scholarship.scholars;
+        Course memory course = courses[_courseId];
+        return course.scholars;
     }
 
     function getCurrentBatchTotal() external view returns (uint256) {
