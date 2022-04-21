@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -77,8 +77,17 @@ contract DeSchool {
         uint256 checkpoints; // number of checkpoints the course should have
         uint256 fee; // the fee for entering the course
         uint256 checkpointBlockSpacing; // the block spacing between checkpoints
+        uint256 scholars; // the number of scholarships the amount creates for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
+    }
+
+    struct Provider {
+        uint256 amount; // the amount provided for scholarships for this particular course
+    }
+
+    struct Scholar {
+        uint256 blockRegistered; // used to decide when a new scholarship can be made available
     }
 
     struct Learner {
@@ -87,20 +96,18 @@ contract DeSchool {
         uint256 checkpointReached; // what checkpoint the learner has reached
     }
 
-    struct Scholarship {
-        uint256 amount; // the amount provided for scholarships for this particular course
-        uint256 scholars; // the number of scholarships the amount creates for this course
-        address provider; // the address providing scholarships, used for withdrawals
-    }
-
     // containing course data mapped by a courseId
     mapping(uint256 => Course) public courses;
+    // containing scholarship provider data mapped by a courseId
+    mapping(uint256 => Provider) public providers;
+
     // containing learner data mapped by a courseId and address
     mapping(uint256 => mapping(address => Learner)) learnerData;
-    // containing scholarship data mapped by a scholarshipId
-    mapping(uint256 => Scholarship) public scholarships;
-    // containing scholarshipIds mapped by a courseId
-    mapping (uint256 => uint256) public courseScholarships;
+    // containing scholar data mapped by a courseId and address
+    mapping(uint256 => mapping(address => Scholar)) scholarData;
+    // containing scholarship provider data mapped by courseId and address
+    mapping(uint256 => mapping(address => Provider)) providerData;
+    
 
     // containing the total underlying amount for a yield batch mapped by batchId
     mapping(uint256 => uint256) batchTotal;
@@ -141,6 +148,21 @@ contract DeSchool {
         string url,
         address creator
     );
+    event ScholarshipCreated(
+        uint256 indexed courseId,
+        uint256 scholarshipAmount,
+        uint256 numScholars,
+        address scholarshipProvider
+    );
+    event ScholarRegistered(
+        uint256 indexed courseId, 
+        address scholar
+    );
+    event ScholarshipWithdrawn(
+        uint256 scholarshipId,
+        uint256 scholarshipAmount,
+        uint256 numScholars
+    );
     event LearnerRegistered(
         uint256 indexed courseId, 
         address learner
@@ -160,18 +182,6 @@ contract DeSchool {
         uint256 batchId,
         uint256 batchAmount,
         uint256 batchYieldAmount
-    );
-    event ScholarshipCreated(
-        uint256 scholarshipId,
-        uint256 scholarshipAmount,
-        uint256 numScholars,
-        address scholarshipProvider,
-        uint256 scholarshipYieldAmount
-    );
-    event ScholarshipWithdrawn(
-        uint256 scholarshipId,
-        uint256 scholarshipAmount,
-        uint256 numScholars
     );
     event CheckpointUpdated(
         uint256 courseId,
@@ -227,6 +237,7 @@ contract DeSchool {
             _checkpoints,
             _fee,
             _checkpointBlockSpacing,
+            0,
             _url,
             _creator
         );
@@ -256,37 +267,28 @@ contract DeSchool {
             "createScholarships: courseId does not exist"
         );
 
-        // transfer the amount directly into a vault in order to save gas fees if possible
-        uint256 scholarshipId_ = scholarshipIdTracker.current();
         // initiate the next scholarship
         scholarshipIdTracker.increment();
         // get the address of the vault from the yRegistry
         I_Vault vault = I_Vault(registry.latestVault(address(stable)));
         // approve the vault
         stable.approve(address(vault), _amount);
-        // mint y from the vault
+        // // transfer the amount directly into a vault in order to save gas fees and mint y from the vault
         uint256 yTokens = vault.deposit(_amount);
-        scholarshipYieldTotal[scholarshipId_] = yTokens;
-        courseScholarships[_courseId] = scholarshipId_;
 
-        Course memory course = courses[_courseId];
-        // TODO: how to ensure that the courseCreator can claim the yield?
-        scholarshipYieldAddress[scholarshipId_] = address(vault);
+        // TODO: how to ensure that the courseCreator can claim the yield? 
+
+        // set providerData to ensure withdrawals are possible
+        providerData[_courseId][msg.sender].amount = _amount;
+
         // calculate how many scholarships can be awarded based on amount provided
-        uint256 scholars = _amount / course.fee;
-        
-        scholarships[scholarshipId_] = Scholarship(
-            _amount,
-            scholars,
-            msg.sender
-        );
+        Course memory course = courses[_courseId];
+        course.scholars = _amount / course.fee;
 
         emit ScholarshipCreated(
-            scholarshipId_,
+            _courseId,
             _amount,
-            scholars,
-            msg.sender, 
-            yTokens
+            msg.sender
         );
     }
 
@@ -316,23 +318,22 @@ contract DeSchool {
 
     /**
      * @notice called by anyone to refresh scholar numbers if previous scholars have completed the course
-     * @param  _courseId courseId to be checked for possible new scholarship slots
+     * @param  _courseId courseId to be checked for possible new scholarship slots. Used here because we don't expect UIs to store scholarshipIds,
+     *                   only courseIds.
      */
     function checkScholarships(uint256 _courseId) external {
         Course memory course = courses[_courseId]; 
         uint256 courseDuration = course.checkpoints * course.checkpointBlockSpacing;
-
-        uint256 scholarshipId_ = courseScholarships[_courseId];
-        Scholarship storage scholarship = scholarships[scholarshipId_];
+        
         // TODO: Loop through all scholarships provided for this course and, 
-        // if block.number > learnerData[courseId_][scholar_address].blockRegistered + courseDuration
+        // if block.number > scholarData[courseId_][scholar_address].blockRegistered + courseDuration
         // scholarship.scholars ++;
         // Question is: how to identify that scholar_address in a gas-efficient way?
     }
 
     /**
-     * @notice handles learner registration if there are scholarship available
-     * @param  _courseId courseId the learner would like to register to
+     * @notice handles scholar registration if there are scholarship available
+     * @param  _courseId courseId the scholar would like to register to
      */
     function registerScholar(uint256 _courseId) public {
         require(
@@ -340,20 +341,19 @@ contract DeSchool {
             "registerScholar: courseId does not exist"
         );
         require(
-            learnerData[_courseId][msg.sender].blockRegistered == 0,
+            scholarData[_courseId][msg.sender].blockRegistered == 0,
             "registerScholar: already registered"
         );
-        uint256 scholarshipId_ = courseScholarships[_courseId];
-        Scholarship storage scholarship = scholarships[scholarshipId_];
+        Course storage course = courses[_courseId];
         require(
-            scholarship.scholars > 0, 
+            course.scholars > 0, 
             "registerScholar: no scholarships available for this course"
         );
-        scholarship.scholars -= 1;
+        course.scholars -= 1;
 
-        learnerData[_courseId][msg.sender].blockRegistered = block.number;
+        scholarData[_courseId][msg.sender].blockRegistered = block.number;
         
-        emit LearnerRegistered(
+        emit ScholarRegistered(
             _courseId, 
             msg.sender
         );
@@ -366,27 +366,20 @@ contract DeSchool {
      * @param _courseId the id of the course from which the scholarship is to be withdrawn.
      */
     function withdrawScholarship(uint256 _courseId, uint256 _amount) public {
-        uint256 scholarshipId_ = courseScholarships[_courseId];
-        Scholarship storage scholarship = scholarships[scholarshipId_];
         require(
-            // TODO: will this be fine if the sender is a multisig?
-            msg.sender == scholarship.provider,
-            "withdrawScholarship: caller must be scholarshipProvider"
-        );
-        require(
-            scholarship.amount <= _amount,
+            providerData[_courseId][msg.sender].amount <= _amount,
             "withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"
         );
         Course memory course =  courses[_courseId];
         uint256 scholarsRemoved = course.fee / _amount;
         // check, as provider could withdraw full amount while scholars are still registered, potentially causing solidity weirdness.
-        if (scholarsRemoved > scholarship.scholars) {
-            scholarship.scholars = 0;
+        if (scholarsRemoved > course.scholars) {
+            course.scholars = 0;
         } else {
-            scholarship.scholars -= scholarsRemoved;
+            course.scholars -= scholarsRemoved;
         }
         emit ScholarshipWithdrawn(
-            scholarshipId_,
+            _courseId,
             _amount,
             scholarsRemoved
         );
