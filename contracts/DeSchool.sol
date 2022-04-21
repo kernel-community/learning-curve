@@ -283,7 +283,7 @@ contract DeSchool {
 
         // calculate how many scholarships can be awarded based on amount provided
         Course memory course = courses[_courseId];
-        course.scholars = _amount / course.fee;
+        course.scholars += _amount / course.fee;
 
         emit ScholarshipCreated(
             _courseId,
