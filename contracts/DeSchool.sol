@@ -324,13 +324,11 @@ contract DeSchool {
     function checkScholarships(uint256 _courseId) external returns (uint256 scholars) {
         Course memory course = courses[_courseId]; 
         uint256 courseDuration = course.checkpoints * course.checkpointBlockSpacing;
-        uint256 finishedScholars = block.number - courseDuration;
+        uint256 finishedBlock = block.number - courseDuration;
 
         for (uint256 i; i < scholarData[_courseId].length; i++) {
-            if (scholarData[_courseId][finishedScholars]) {
+            if (scholarData[_courseId][finishedBlock].scholar != address(0)) {
                 course.scholars ++;
-            } else {
-                return course.scholars;
             }
         }
         return course.scholars;
