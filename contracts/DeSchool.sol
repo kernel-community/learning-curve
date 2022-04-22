@@ -245,7 +245,7 @@ contract DeSchool {
     /**
      * @notice           this method allows anyone to create perpetual scholarships by staking
      *                   capital for learners to use. The can claim it back at any time.
-     * @param  _courseId courseId the donor would like to fund
+     * @param  _courseId course id the donor would like to fund
      * @param  _amount   the amount in DAI that the donor wishes to give
      */
     function createScholarships(uint256 _courseId, uint256 _amount) 
