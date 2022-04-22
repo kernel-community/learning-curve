@@ -328,16 +328,18 @@ contract DeSchool {
         returns (uint256 scholars) 
     {
         Course memory course = courses[_courseId]; 
-        uint256 finishedBlock = block.number - course.duration;
+        uint256 checkedBlock = block.number - course.duration;
 
         for (uint256 i; i < course.scholars; i++) {
-            for (uint256 j = course.beginBlock; j < finishedBlock; j++) {
+            for (uint256 j = course.beginBlock; j < checkedBlock; j++) {              
                 if (scholarData[_courseId][j].scholar != address(0)) {
                     scholarData[_courseId][j].completed = true;
                     course.scholars ++;
                 }
             }
         }
+        // set the "beginning" block to be the last checked block so the above loop doesn't get impossible
+        course.beginBlock = checkedBlock;
         return course.scholars;
     }
 
