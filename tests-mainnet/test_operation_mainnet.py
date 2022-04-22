@@ -16,7 +16,7 @@ def test_full_mint(
     deschool, learning_curve = contracts
 
     tx = deschool.createCourse(
-        constants_mainnet.FEE,
+        constants_mainnet.STAKE,
         constants_mainnet.DURATION,
         constants_mainnet.URL,
         constants_mainnet.CREATOR,
@@ -25,7 +25,7 @@ def test_full_mint(
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
-    assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
+    assert tx.events["CourseCreated"]["stake"] == constants_mainnet.STAKE
     assert tx.events["CourseCreated"]["duration"] == constants_mainnet.DURATION
     assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
     assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
@@ -34,19 +34,19 @@ def test_full_mint(
     for n, learner in enumerate(learners):
         dai.transfer(
             learner,
-            constants_mainnet.FEE,
+            constants_mainnet.STAKE,
             {"from": deployer}
         )
-        dai.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        dai.approve(deschool, constants_mainnet.STAKE, {"from": learner})
         before_bal = dai.balanceOf(deschool)
         tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_mainnet.FEE == dai.balanceOf(deschool)
+        assert before_bal + constants_mainnet.STAKE == dai.balanceOf(deschool)
 
-    assert deschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
-    assert dai.balanceOf(deschool) == constants_mainnet.FEE * len(learners)
+    assert deschool.getCurrentBatchTotal() == constants_mainnet.STAKE * len(learners)
+    assert dai.balanceOf(deschool) == constants_mainnet.STAKE * len(learners)
     tx = deschool.batchDeposit({"from": kernelTreasury})
     brownie.chain.mine(constants_mainnet.DURATION)
     gen_lev_strat.harvest({"from": keeper})
@@ -75,7 +75,7 @@ def test_full_mint(
             {"from": learner})
         tx = learning_curve.burn(lc_balance_before, {"from": learner})
         assert learning_curve.balanceOf(learner) < lc_balance_before
-        assert dai.balanceOf(learner) - constants_mainnet.FEE < constants_mainnet.ACCURACY
+        assert dai.balanceOf(learner) - constants_mainnet.STAKE < constants_mainnet.ACCURACY
         print("Learner " + str(n) + " balance: " + str(learning_curve.balanceOf(learner)))
         print("DAI balance: " + str(dai.balanceOf(learner)))
         print("DAI collateral: " + str(dai.balanceOf(learning_curve)))
@@ -98,7 +98,7 @@ def test_full_redeem(
     deschool, learning_curve = contracts
 
     tx = deschool.createCourse(
-        constants_mainnet.FEE,
+        constants_mainnet.STAKE,
         constants_mainnet.DURATION,
         constants_mainnet.URL,
         constants_mainnet.CREATOR,
@@ -108,7 +108,7 @@ def test_full_redeem(
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
     assert tx.events["CourseCreated"]["duration"] == constants_mainnet.DURATION
-    assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
+    assert tx.events["CourseCreated"]["stake"] == constants_mainnet.STAKE
     assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
     assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
     assert deschool.getNextCourseId() == 1
@@ -116,19 +116,19 @@ def test_full_redeem(
     for n, learner in enumerate(learners):
         dai.transfer(
             learner,
-            constants_mainnet.FEE,
+            constants_mainnet.STAKE,
             {"from": deployer}
         )
-        dai.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        dai.approve(deschool, constants_mainnet.STAKE, {"from": learner})
         before_bal = dai.balanceOf(deschool)
         tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_mainnet.FEE == dai.balanceOf(deschool)
+        assert before_bal + constants_mainnet.STAKE == dai.balanceOf(deschool)
 
-    assert deschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
-    assert dai.balanceOf(deschool) == constants_mainnet.FEE * len(learners)
+    assert deschool.getCurrentBatchTotal() == constants_mainnet.STAKE * len(learners)
+    assert dai.balanceOf(deschool) == constants_mainnet.STAKE * len(learners)
     tx = deschool.batchDeposit({"from": kernelTreasury})
     assert dai.balanceOf(deschool) == 0
     assert deschool.getCurrentBatchId() == 1

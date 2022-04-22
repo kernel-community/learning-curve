@@ -43,7 +43,7 @@ def contracts_with_courses(contracts, steward):
     deschool, learning_curve = contracts
     for n in range(5):
         tx = deschool.createCourse(
-        constants_mainnet.FEE,
+        constants_mainnet.STAKE,
         constants_mainnet.DURATION,
         constants_mainnet.URL,
         steward,
@@ -56,8 +56,8 @@ def contracts_with_courses(contracts, steward):
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
     deschool, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
-        token.transfer(learner, constants_mainnet.FEE, {"from": deployer})
-        token.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        token.transfer(learner, constants_mainnet.STAKE, {"from": deployer})
+        token.approve(deschool, constants_mainnet.STAKE, {"from": learner})
         deschool.register(0, {"from": learner})
     yield deschool, learning_curve
 

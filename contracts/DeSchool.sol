@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -74,9 +74,9 @@ contract DeSchool {
     using Counters for Counters.Counter;
 
     struct Course {
-        uint256 beginBlock; // a block number we use to enable perpetual scholarships
-        uint256 fee; // the fee for entering the course
+        uint256 stake; // an amount in DAI to be staked for the duration course
         uint256 duration; // the duration of the course, in number of blocks
+        uint256 checkpoint; // a block number we use to enable perpetual scholarships
         uint256 scholars; // the number of scholarships the amount creates for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
@@ -94,7 +94,7 @@ contract DeSchool {
     }
 
     struct Learner {
-        uint256 blockRegistered; // used to decide when a learner can claim their registration fee back
+        uint256 blockRegistered; // used to decide when a learner can claim their stake back
         uint256 yieldBatchId; // the batch id for this learner's Yield bearing deposit
     }
 
@@ -136,9 +136,9 @@ contract DeSchool {
 
     event CourseCreated(
         uint256 indexed courseId,
-        uint256 beginBlock,
-        uint256 fee,
+        uint256 stake,
         uint256 duration,
+        uint256 checkpoint,
         string url,
         address creator
     );
@@ -167,7 +167,7 @@ contract DeSchool {
         uint256 indexed courseId, 
         address learner
     );
-    event FeeRedeemed(
+    event StakeRedeemed(
         uint256 courseId, 
         address learner, 
         uint256 amount
@@ -200,18 +200,18 @@ contract DeSchool {
 
     /**
      * @notice            create a course
-     * @param  _fee       fee for a learner to register
+     * @param  _stake     stake required to register
      * @param  _duration  the duration of the course, in number of blocks
      * @param  _url       url leading to course details
      * @param  _creator   the address that excess yield will be sent to on a redeem
      */
     function createCourse(
-        uint256 _fee,
+        uint256 _stake,
         uint256 _duration,
         string calldata _url,
         address _creator
     ) external {
-        require(_fee > 0, "createCourse: fee must be greater than 0");
+        require(_stake > 0, "createCourse: stake must be greater than 0");
         require(
             _duration > 0,
             "createCourse: duration must be greater than 0"
@@ -223,9 +223,9 @@ contract DeSchool {
         uint256 courseId_ = courseIdTracker.current();
         courseIdTracker.increment();
         courses[courseId_] = Course(
-            block.number,
-            _fee,
+            _stake,
             _duration,
+            block.number,
             0,
             _url,
             _creator,
@@ -234,9 +234,9 @@ contract DeSchool {
         );
         emit CourseCreated(
             courseId_,
-            block.number,
-            _fee,
+            _stake,
             _duration,
+            block.number,
             _url,
             _creator
         );
@@ -279,7 +279,7 @@ contract DeSchool {
         providerData[_courseId][msg.sender].amount = _amount;
 
         // calculate how many scholarships can be awarded based on amount provided
-        uint256 newScholars = _amount / course.fee;
+        uint256 newScholars = _amount / course.stake;
         course.scholars += newScholars;
 
         emit ScholarshipCreated(
@@ -335,15 +335,15 @@ contract DeSchool {
         uint256 checkedBlock = block.number - course.duration;
 
         for (uint256 i; i < course.scholars; i++) {
-            for (uint256 j = course.beginBlock; j < checkedBlock; j++) {              
+            for (uint256 j = course.checkpoint; j < checkedBlock; j++) {              
                 if (scholarData[_courseId][j].scholar != address(0)) {
                     scholarData[_courseId][j].completed = true;
                     course.scholars ++;
                 }
             }
         }
-        // set the "beginning" block to be the last checked block so the above loop doesn't get impossible
-        course.beginBlock = checkedBlock;
+        // set the last checked block so the above loop doesn't get impossible
+        course.checkpoint = checkedBlock;
         uint newScholars = course.scholars - currentScholars;
         emit ScholarshipsReopened(
             _courseId,
@@ -398,7 +398,7 @@ contract DeSchool {
         );
         Course memory course =  courses[_courseId];
         I_Vault vault = I_Vault(course.scholarshipVault);
-        uint256 scholarsRemoved = course.fee / _amount;
+        uint256 scholarsRemoved = course.stake / _amount;
 
         // first, mark down the amount provided
         providerData[_courseId][msg.sender].amount -= _amount;
@@ -437,11 +437,11 @@ contract DeSchool {
         );
         Course memory course = courses[_courseId];
 
-        stable.safeTransferFrom(msg.sender, address(this), course.fee);
+        stable.safeTransferFrom(msg.sender, address(this), course.stake);
 
         learnerData[_courseId][msg.sender].blockRegistered = block.number;
         learnerData[_courseId][msg.sender].yieldBatchId = batchId_;
-        batchTotal[batchId_] += course.fee;
+        batchTotal[batchId_] += course.stake;
 
         emit LearnerRegistered(
             _courseId, 
@@ -473,15 +473,11 @@ contract DeSchool {
     }
 
     /**
-     * @notice           All course are deployed with a duration in blocks, after which learners
-     *                   can either claim their fee back, or use it to mint LEARN
-     *
-     *                   This is a helper function that checks where a learner is
-     *                   in a course and is used by both redeem() and mint().
-     *
+     * @notice           All courses are deployed with a duration in blocks, after which learners
+     *                   can either claim their stake back, or use it to mint LEARN
      * @param  _learner  address of the learner to verify
      * @param  _courseId course id to verify for the learner
-     * @return completed if the full course duration has passed and the learner can redeem their fee or mint LEARN
+     * @return completed if the full course duration has passed and the learner can redeem their stake or mint LEARN
      */
     function verify(address _learner, uint256 _courseId)
         public
@@ -502,15 +498,15 @@ contract DeSchool {
     }
 
     /**
-     * @notice           handles fee redemption into stable
+     * @notice           handles stake redemption in DAI
      *                   if a learner is redeeming rather than minting, it means
-     *                   they are simply requesting their initial fee back.
+     *                   they are simply requesting their initial stake back.
      *                   In this case, we check that the course duration has passed and,
-     *                   if so, send the full fee back to the learner.
+     *                   if so, send the full stake back to the learner.
      *
      *                   Whatever yield was earned is sent to the course creator address.
      *
-     * @param  _courseId course id to redeem the fee from
+     * @param  _courseId course id to redeem the stake from
      */
     function redeem(uint256 _courseId) 
         external 
@@ -532,15 +528,15 @@ contract DeSchool {
                 ]
             );
             uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-            uint256 temp = (courses[_courseId].fee * 1e18) / batchTotal[batchId_];
+            uint256 temp = (courses[_courseId].stake * 1e18) / batchTotal[batchId_];
             learnerShares = (temp * batchYieldTotal[batchId_]) / 1e18;
             shares = vault.withdraw(learnerShares);
-            if (courses[_courseId].fee < shares) {
-                yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].fee;
-                emit FeeRedeemed(_courseId, msg.sender, courses[_courseId].fee);
-                stable.safeTransfer(msg.sender, courses[_courseId].fee);
+            if (courses[_courseId].stake < shares) {
+                yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].stake;
+                emit StakeRedeemed(_courseId, msg.sender, courses[_courseId].stake);
+                stable.safeTransfer(msg.sender, courses[_courseId].stake);
             } else {
-                emit FeeRedeemed(
+                emit StakeRedeemed(
                     _courseId, 
                     msg.sender, 
                     shares
@@ -548,20 +544,20 @@ contract DeSchool {
                 stable.safeTransfer(msg.sender, shares);
             }
         } else {
-            emit FeeRedeemed(
+            emit StakeRedeemed(
                 _courseId, 
                 msg.sender, 
-                courses[_courseId].fee
+                courses[_courseId].stake
             );
-            stable.safeTransfer(msg.sender, courses[_courseId].fee);
+            stable.safeTransfer(msg.sender, courses[_courseId].stake);
         }
     }
 
     /**
      * @notice           handles learner minting new LEARN
-     *                   checks via verify() that the original fee can be redeemed and used
+     *                   checks via verify() that the original stake can be redeemed and used
      *                   to mint via the Learning Curve.
-     *                   Any yield earned on the original fee is sent to
+     *                   Any yield earned on the original stake is sent to
      *                   the creator's designated address.
      *                   All the resulting LEARN tokens are returned to the learner.
      * @param  _courseId course id to mint LEARN from
@@ -586,29 +582,29 @@ contract DeSchool {
                 ]
             );
             uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-            uint256 temp = (courses[_courseId].fee * 1e18) / batchTotal[batchId_];
+            uint256 temp = (courses[_courseId].stake * 1e18) / batchTotal[batchId_];
             learnerShares = (temp * batchYieldTotal[batchId_]) / 1e18;
             shares = vault.withdraw(learnerShares);
         }
-        if (courses[_courseId].fee < shares) {
-            yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].fee;
-            stable.approve(address(learningCurve), courses[_courseId].fee);
+        if (courses[_courseId].stake < shares) {
+            yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].stake;
+            stable.approve(address(learningCurve), courses[_courseId].stake);
             uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-            learningCurve.mintForAddress(msg.sender, courses[_courseId].fee);
+            learningCurve.mintForAddress(msg.sender, courses[_courseId].stake);
             emit LearnMintedFromCourse(
                 _courseId,
                 msg.sender,
-                courses[_courseId].fee,
+                courses[_courseId].stake,
                 learningCurve.balanceOf(msg.sender) - balanceBefore
             );
         } else {
-            stable.approve(address(learningCurve), courses[_courseId].fee);
+            stable.approve(address(learningCurve), courses[_courseId].stake);
             uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-            learningCurve.mintForAddress(msg.sender, courses[_courseId].fee);
+            learningCurve.mintForAddress(msg.sender, courses[_courseId].stake);
             emit LearnMintedFromCourse(
                 _courseId,
                 msg.sender,
-                courses[_courseId].fee,
+                courses[_courseId].stake,
                 learningCurve.balanceOf(msg.sender) - balanceBefore
             );
         }
@@ -619,7 +615,7 @@ contract DeSchool {
      *                  There may be yield from scholarships provided for their course, which is assigned as
      *                  the scholarship is created and may be claimed at any time thereafter.
      *                  There may also be yield from any learners who have registered in the case no scholarships are available.
-     *                  When the learner decides to redeem or mint their staked fee, this yield is assigned to the creator.
+     *                  When the learner decides to redeem or mint their stake, this yield is assigned to the creator.
      * @param _courseId only course creators can claim yield. The information for how much yield they can claim
      *                  is always accessible via the courseId.
      */
@@ -640,8 +636,8 @@ contract DeSchool {
     }
 
     /**
-     * @notice           check whether the fee a learner staked has been deployed to a Yearn vault
-     * @param  _courseId course id to redeem fee or mint LEARN from
+     * @notice           check whether a learner's staked has been deployed to a Yearn vault
+     * @param  _courseId course id to redeem stake or mint LEARN from
      * @return deployed  whether the funds to be redeemed were deployed to yearn
      */
     function isDeployed(uint256 _courseId)
@@ -662,8 +658,7 @@ contract DeSchool {
         view 
         returns (uint256) 
     {
-        Course memory course = courses[_courseId];
-        return course.scholars;
+        return courses[_courseId].scholars;
     }
 
     function getCurrentBatchTotal() 

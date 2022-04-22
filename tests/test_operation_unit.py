@@ -6,7 +6,7 @@ def test_full(deployer, learners, steward, contracts, token):
     deschool, learning_curve = contracts
 
     tx = deschool.createCourse(
-        constants_unit.FEE,
+        constants_unit.STAKE,
         constants_unit.DURATION,
         constants_unit.URL,
         constants_unit.CREATOR,
@@ -15,27 +15,27 @@ def test_full(deployer, learners, steward, contracts, token):
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
+    assert tx.events["CourseCreated"]["stake"] == constants_unit.STAKE
     assert tx.events["CourseCreated"]["duration"] == constants_unit.DURATION
-    assert tx.events["CourseCreated"]["fee"] == constants_unit.FEE
     assert tx.events["CourseCreated"]["url"] == constants_unit.URL
     assert tx.events["CourseCreated"]["creator"] == constants_unit.CREATOR
 
     for n, learner in enumerate(learners):
         token.transfer(
             learner,
-            constants_unit.FEE,
+            constants_unit.STAKE,
             {"from": deployer}
         )
-        token.approve(deschool, constants_unit.FEE, {"from": learner})
+        token.approve(deschool, constants_unit.STAKE, {"from": learner})
         before_bal = token.balanceOf(deschool)
         tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_unit.FEE == token.balanceOf(deschool)
+        assert before_bal + constants_unit.STAKE == token.balanceOf(deschool)
 
-    assert deschool.getCurrentBatchTotal() == constants_unit.FEE * len(learners)
-    assert token.balanceOf(deschool) == constants_unit.FEE * len(learners)
+    assert deschool.getCurrentBatchTotal() == constants_unit.STAKE * len(learners)
+    assert token.balanceOf(deschool) == constants_unit.STAKE * len(learners)
 
     brownie.chain.mine(constants_unit.DURATION)
 

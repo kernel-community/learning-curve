@@ -10,8 +10,8 @@ def test_register_permit(contracts_with_courses, learners, token, deployer):
     deschool, learning_curve = contracts_with_courses
     signer = Account.create()
     holder = signer.address
-    token.transfer(holder, constants_mainnet.FEE, {"from": deployer})
-    assert token.balanceOf(holder) == constants_mainnet.FEE
+    token.transfer(holder, constants_mainnet.STAKE, {"from": deployer})
+    assert token.balanceOf(holder) == constants_mainnet.STAKE
     permit = build_permit(holder, str(deschool), token, 3600)
     signed = signer.sign_message(permit)
     print(token.balanceOf(deschool.address))
@@ -31,13 +31,13 @@ def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_l
     for n, learner in enumerate(learners):
         us_ydai_balance = ydai.balanceOf(deschool)
         tx = deschool.redeem(0, {"from": learner})
-        assert "FeeRedeemed" in tx.events
-        assert tx.events["FeeRedeemed"]["amount"] == constants_mainnet.FEE
+        assert "StakeRedeemed" in tx.events
+        assert tx.events["StakeRedeemed"]["amount"] == constants_mainnet.STAKE
         assert deschool.verify(learner, 0)
         assert token.balanceOf(steward) == 0
         assert deschool.getYieldRewards(steward, {"from": steward}) > 0
         assert ydai.balanceOf(deschool) < us_ydai_balance
-        assert token.balanceOf(learner) == constants_mainnet.FEE
+        assert token.balanceOf(learner) == constants_mainnet.STAKE
         assert token.balanceOf(learning_curve) == 1e18
         assert ydai.balanceOf(learning_curve) == 0
     kt_redemption = deschool.getYieldRewards(steward, {"from": steward})
@@ -65,7 +65,7 @@ def test_batch_success(
            tx.events["BatchDeposited"]["batchId"] == \
            deschool.getCurrentBatchId() - 1
     assert token.balanceOf(deschool) == 0
-    assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.FEE * len(learners)
+    assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE * len(learners)
     assert ydai.balanceOf(deschool) > 0
     assert ydai.balanceOf(deschool) == tx.events["BatchDeposited"]["batchYieldAmount"]
 
@@ -81,16 +81,16 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
     for n, learner in enumerate(learners):
         token.transfer(
             learner,
-            constants_mainnet.FEE,
+            constants_mainnet.STAKE,
             {"from": deployer}
         )
-        token.approve(deschool, constants_mainnet.FEE, {"from": learner})
+        token.approve(deschool, constants_mainnet.STAKE, {"from": learner})
         before_bal = token.balanceOf(deschool)
         tx = deschool.register(0, {"from": learner})
 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
-        assert before_bal + constants_mainnet.FEE == token.balanceOf(deschool)
+        assert before_bal + constants_mainnet.STAKE == token.balanceOf(deschool)
         us_balance_before = token.balanceOf(deschool)
         batch_id_before = deschool.getCurrentBatchId()
         ydai_bal_before = ydai.balanceOf(deschool)
@@ -101,7 +101,7 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
                tx.events["BatchDeposited"]["batchId"] == \
                deschool.getCurrentBatchId() - 1
         assert token.balanceOf(deschool) == 0
-        assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.FEE
+        assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE
         assert ydai.balanceOf(deschool) > ydai_bal_before
         assert ydai.balanceOf(deschool) - ydai_bal_before == tx.events["BatchDeposited"]["batchYieldAmount"]
 
@@ -115,16 +115,16 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
     gen_lev_strat.harvest({"from": keeper})
 
     for n, learner in enumerate(learners):
-        mintable_balance = learning_curve.getMintableForReserveAmount(constants_mainnet.FEE)
+        mintable_balance = learning_curve.getMintableForReserveAmount(constants_mainnet.STAKE)
         lc_dai_balance = token.balanceOf(learning_curve)
         us_dai_balance = token.balanceOf(deschool)
         learner_lc_balance = learning_curve.balanceOf(learner)
         tx = deschool.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
         assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
-        assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - constants_mainnet.FEE) < constants_mainnet.ACCURACY_Y
+        assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
         assert deschool.verify(learner, 0)
-        assert abs(token.balanceOf(learning_curve) - lc_dai_balance - constants_mainnet.FEE) < constants_mainnet.ACCURACY_Y
+        assert abs(token.balanceOf(learning_curve) - lc_dai_balance - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
         assert abs(token.balanceOf(deschool) - deschool.getYieldRewards(steward)) < constants_mainnet.ACCURACY
         assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
     assert token.balanceOf(deschool) == deschool.getYieldRewards(steward)
