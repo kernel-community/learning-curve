@@ -75,9 +75,8 @@ contract DeSchool {
 
     struct Course {
         uint256 beginBlock;
-        uint256 checkpoints; // number of checkpoints the course should have
         uint256 fee; // the fee for entering the course
-        uint256 checkpointBlockSpacing; // the block spacing between checkpoints
+        uint256 duration; // the duration of the course, in number of blocks
         uint256 scholars; // the number of scholarships the amount creates for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
@@ -95,7 +94,6 @@ contract DeSchool {
     struct Learner {
         uint256 blockRegistered; // used to decide when a learner can claim their registration fee back
         uint256 yieldBatchId; // the batch id for this learner's Yield bearing deposit
-        uint256 checkpointReached; // what checkpoint the learner has reached
     }
 
     // containing course data mapped by a courseId
@@ -125,8 +123,6 @@ contract DeSchool {
     // containing the vault address of the the yield token for a yield scholarship mapped by scholarshipId
     mapping(uint256 => address) scholarshipYieldAddress;
 
-    // containing the underlying amount a learner deposited in a specific batchId
-    mapping(uint256 => mapping(address => uint256)) learnerDeposit;
     // yield rewards for an eligible address
     mapping(address => uint256) yieldRewards;
 
@@ -145,9 +141,8 @@ contract DeSchool {
     event CourseCreated(
         uint256 indexed courseId,
         uint256 beginBlock,
-        uint256 checkpoints,
         uint256 fee,
-        uint256 checkpointBlockSpacing,
+        uint256 duration,
         string url,
         address creator
     );
@@ -186,11 +181,6 @@ contract DeSchool {
         uint256 batchAmount,
         uint256 batchYieldAmount
     );
-    event CheckpointUpdated(
-        uint256 courseId,
-        uint256 checkpointReached,
-        address learner
-    );
     event YieldRewardRedeemed(
         address redeemer, 
         uint256 yieldRewarded
@@ -209,26 +199,20 @@ contract DeSchool {
     /**
      * @notice                         create a course
      * @param  _fee                    fee for a learner to register
-     * @param  _checkpoints            number of checkpoints on the course
-     * @param  _checkpointBlockSpacing block spacing between subsequent checkpoints
+     * @param  _duration               the duration of the course, in number of blocks
      * @param  _url                    url leading to course details
-     * @param  _creator        the address that excess yield will be sent to on a redeem
+     * @param  _creator                the address that excess yield will be sent to on a redeem
      */
     function createCourse(
         uint256 _fee,
-        uint256 _checkpoints,
-        uint256 _checkpointBlockSpacing,
+        uint256 _duration,
         string calldata _url,
         address _creator
     ) external {
         require(_fee > 0, "createCourse: fee must be greater than 0");
         require(
-            _checkpointBlockSpacing > 0,
-            "createCourse: checkpointBlockSpacing must be greater than 0"
-        );
-        require(
-            _checkpoints > 0,
-            "createCourse: checkpoint must be greater than 0"
+            _duration > 0,
+            "createCourse: duration must be greater than 0"
         );
         require(
             _creator != address(0),
@@ -238,9 +222,8 @@ contract DeSchool {
         courseIdTracker.increment();
         courses[courseId_] = Course(
             block.number,
-            _checkpoints,
             _fee,
-            _checkpointBlockSpacing,
+            _duration,
             0,
             _url,
             _creator
@@ -248,9 +231,8 @@ contract DeSchool {
         emit CourseCreated(
             courseId_,
             block.number,
-            _checkpoints,
             _fee,
-            _checkpointBlockSpacing,
+            _duration,
             _url,
             _creator
         );
@@ -328,8 +310,7 @@ contract DeSchool {
      */
     function checkScholarships(uint256 _courseId) external returns (uint256 scholars) {
         Course memory course = courses[_courseId]; 
-        uint256 courseDuration = course.checkpoints * course.checkpointBlockSpacing;
-        uint256 finishedBlock = block.number - courseDuration;
+        uint256 finishedBlock = block.number - course.duration;
 
         for (uint256 i; i < course.scholars; i++) {
             for (uint256 j = course.beginBlock; j < finishedBlock; j++) {
@@ -419,7 +400,6 @@ contract DeSchool {
         learnerData[_courseId][msg.sender].blockRegistered = block.number;
         learnerData[_courseId][msg.sender].yieldBatchId = batchId_;
         batchTotal[batchId_] += course.fee;
-        learnerDeposit[batchId_][msg.sender] += course.fee;
 
         emit LearnerRegistered(
             _courseId, 
@@ -436,109 +416,77 @@ contract DeSchool {
 
     /**
      * @notice           handles checkpoint verification
-     *                   All course are deployed with a given number of checkpoints
-     *                   allowing learners to receive a portion of their fees back
-     *                   at various stages in the course.
+     *                   All course are deployed with a duration in blocks, after which learners
+     *                   can either claim their fee back, or use it to mint LEARN
      *
      *                   This is a helper function that checks where a learner is
-     *                   in a course and is used by both redeem() and mint() to figure out
-     *                   the proper amount required.
+     *                   in a course and is used by both redeem() and mint().
      *
-     * @param  learner   address of the learner to verify
+     * @param  _learner  address of the learner to verify
      * @param  _courseId course id to verify for the learner
-     * @return           the checkpoint that the learner has reached
+     * @return completed if the full course duration has passed and the learner can redeem their fee or mint LEARN
      */
-    function verify(address learner, uint256 _courseId)
+    function verify(address _learner, uint256 _courseId)
         public
         view
-        returns (uint256)
+        returns (bool completed)
     {
         require(
             _courseId < courseIdTracker.current(),
             "verify: courseId does not exist"
         );
         require(
-            learnerData[_courseId][learner].blockRegistered != 0,
+            learnerData[_courseId][_learner].blockRegistered != 0,
             "verify: not registered to this course"
         );
-        return _verify(learner, _courseId);
-    }
-
-    /**
-     * @notice                   handles checkpoint verification
-     *                           All course are deployed with a given number of checkpoints
-     *                           allowing learners to receive a portion of their fees back
-     *                           at various stages in the course.
-     *
-     *                           This is a helper function that checks where a learner is
-     *                           in a course and is used by both redeem() and mint() to figure out
-     *                           the proper amount required.
-     *
-     * @param  learner           address of the learner to verify
-     * @param  _courseId         course id to verify for the learner
-     * @return checkpointReached the checkpoint that the learner has reached.
-     */
-    function _verify(address learner, uint256 _courseId)
-        internal
-        view
-        returns (uint256 checkpointReached)
-    {
-        uint256 blocksSinceRegister = block.number -
-            learnerData[_courseId][learner].blockRegistered;
-        checkpointReached =
-            blocksSinceRegister /
-            courses[_courseId].checkpointBlockSpacing;
-        if (courses[_courseId].checkpoints < checkpointReached) {
-            checkpointReached = courses[_courseId].checkpoints;
+        if (courses[_courseId].duration < block.number - learnerData[_courseId][_learner].blockRegistered) {
+            return true;
         }
     }
 
     /**
      * @notice           handles fee redemption into stable
      *                   if a learner is redeeming rather than minting, it means
-     *                   they are simply requesting their initial fee back (whether
-     *                   they have completed the course or not).
-     *                   In this case, it checks what proportion of `fee` (set when
-     *                   the course is deployed) must be returned and sends it back
-     *                   to the learner.
+     *                   they are simply requesting their initial fee back.
+     *                   In this case, we check that the course duration has passed and,
+     *                   if so, send the full fee back to the learner.
      *
-     *                   Whatever yield they earned is sent to the course configured address.
+     *                   Whatever yield was earned is sent to the course creator address.
      *
      * @param  _courseId course id to redeem the fee from
      */
     function redeem(uint256 _courseId) external {
         uint256 shares;
         uint256 learnerShares;
-        bool deployed;
         require(
             learnerData[_courseId][msg.sender].blockRegistered != 0,
             "redeem: not a learner on this course"
         );
-        uint256 checkpointReached = learnerData[_courseId][msg.sender]
-            .checkpointReached;
-        (learnerShares, deployed) = determineEligibleAmount(_courseId);
-        uint256 latestCheckpoint = learnerData[_courseId][msg.sender]
-            .checkpointReached;
-        if (deployed) {
+        require(
+            verify(msg.sender, _courseId), 
+            "redeem: not yet eligible - wait for the full course duration to pass"
+        );
+        if (isDeployed(_courseId)) {
             I_Vault vault = I_Vault(
                 batchYieldAddress[
                     learnerData[_courseId][msg.sender].yieldBatchId
                 ]
             );
+            uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
+            uint256 temp = (courses[_courseId].fee * 1e18) / batchTotal[batchId_];
+            learnerShares = (temp * batchYieldTotal[batchId_]) / 1e18;
             shares = vault.withdraw(learnerShares);
-            uint256 fee_ = ((latestCheckpoint - checkpointReached) *
-                courses[_courseId].fee) / courses[_courseId].checkpoints;
-            if (fee_ < shares) {
-                yieldRewards[courses[_courseId].creator] += shares - fee_;
-                emit FeeRedeemed(_courseId, msg.sender, fee_);
-                stable.safeTransfer(msg.sender, fee_);
+            if (courses[_courseId].fee < shares) {
+                yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].fee;
+                emit FeeRedeemed(_courseId, msg.sender, courses[_courseId].fee);
+                stable.safeTransfer(msg.sender, courses[_courseId].fee);
             } else {
                 emit FeeRedeemed(_courseId, msg.sender, shares);
                 stable.safeTransfer(msg.sender, shares);
             }
         } else {
-            emit FeeRedeemed(_courseId, msg.sender, learnerShares);
-            stable.safeTransfer(msg.sender, learnerShares);
+            emit FeeRedeemed(_courseId, msg.sender, courses[_courseId].fee);
+            stable.safeTransfer(msg.sender, courses[_courseId].fee);
         }
     }
 
@@ -552,45 +500,45 @@ contract DeSchool {
      */
     function mint(uint256 _courseId) external {
         uint256 shares;
-        bool deployed;
+        uint256 learnerShares;
         require(
             learnerData[_courseId][msg.sender].blockRegistered != 0,
             "mint: not a learner on this course"
         );
-        uint256 checkpointReached = learnerData[_courseId][msg.sender]
-            .checkpointReached;
-        (shares, deployed) = determineEligibleAmount(_courseId);
-        uint256 latestCheckpoint = learnerData[_courseId][msg.sender]
-            .checkpointReached;
-        if (deployed) {
+        require(
+            verify(msg.sender, _courseId), 
+            "mint: not yet eligible - wait for the full course duration to pass"
+        );
+        if (isDeployed(_courseId)) {
             I_Vault vault = I_Vault(
                 batchYieldAddress[
                     learnerData[_courseId][msg.sender].yieldBatchId
                 ]
             );
-            shares = vault.withdraw(shares);
+            uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
+            uint256 temp = (courses[_courseId].fee * 1e18) / batchTotal[batchId_];
+            learnerShares = (temp * batchYieldTotal[batchId_]) / 1e18;
+            shares = vault.withdraw(learnerShares);
         }
-        uint256 fee_ = ((latestCheckpoint - checkpointReached) *
-            courses[_courseId].fee) / courses[_courseId].checkpoints;
-        if (fee_ < shares) {
-            yieldRewards[courses[_courseId].creator] += shares - fee_;
-            stable.approve(address(learningCurve), fee_);
+        if (courses[_courseId].fee < shares) {
+            yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].fee;
+            stable.approve(address(learningCurve), courses[_courseId].fee);
             uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-            learningCurve.mintForAddress(msg.sender, fee_);
+            learningCurve.mintForAddress(msg.sender, courses[_courseId].fee);
             emit LearnMintedFromCourse(
                 _courseId,
                 msg.sender,
-                fee_,
+                courses[_courseId].fee,
                 learningCurve.balanceOf(msg.sender) - balanceBefore
             );
         } else {
-            stable.approve(address(learningCurve), shares);
+            stable.approve(address(learningCurve), courses[_courseId].fee);
             uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-            learningCurve.mintForAddress(msg.sender, shares);
+            learningCurve.mintForAddress(msg.sender, courses[_courseId].fee);
             emit LearnMintedFromCourse(
                 _courseId,
                 msg.sender,
-                shares,
+                courses[_courseId].fee,
                 learningCurve.balanceOf(msg.sender) - balanceBefore
             );
         }
@@ -609,47 +557,21 @@ contract DeSchool {
     }
 
     /**
-     * @notice                get and update the amount of funds that a learner is eligible for at this timestamp
-     * @param  _courseId      course id to mint LEARN from
-     * @return eligibleShares the number of shares the learner can withdraw
-     *                        (if bool deployed is true will return yDai amount, if it is false it will
-     *                        return the Dai amount)
+     * @notice                check whether the fee a learner staked has been deployed to a Yearn vault
+     * @param  _courseId      course id to redeem fee or mint LEARN from
      * @return deployed       whether the funds to be redeemed were deployed to yearn
      */
-    function determineEligibleAmount(uint256 _courseId)
+    function isDeployed(uint256 _courseId)
         internal
-        returns (uint256 eligibleShares, bool deployed)
+        view
+        returns (bool deployed)
     {
-        uint256 fee = learnerDeposit[_courseId][msg.sender];
-        require(fee > 0, "no fee to redeem");
-        uint256 checkpointReached = verify(msg.sender, _courseId);
-        require(
-            checkpointReached >
-                learnerData[_courseId][msg.sender].checkpointReached,
-            "fee redeemed at this checkpoint"
-        );
-        uint256 eligibleAmount = ((checkpointReached -
-            learnerData[_courseId][msg.sender].checkpointReached) *
-            courses[_courseId].fee) / courses[_courseId].checkpoints;
-
-        learnerData[_courseId][msg.sender]
-            .checkpointReached = checkpointReached;
-
-        emit CheckpointUpdated(_courseId, checkpointReached, msg.sender);
-
-        if (eligibleAmount > fee) {
-            eligibleAmount = fee;
-        }
         uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
         if (batchId_ == batchIdTracker.current()) {
-            deployed = false;
-            eligibleShares = eligibleAmount;
+            return false;
         } else {
-            uint256 temp = (eligibleAmount * 1e18) / batchTotal[batchId_];
-            deployed = true;
-            eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
+            return true;
         }
-        learnerDeposit[_courseId][msg.sender] -= eligibleAmount;
     }
 
     function getScholars(uint256 _courseId) external view returns (uint256) {
@@ -675,63 +597,6 @@ contract DeSchool {
 
     function getNextCourseId() external view returns (uint256) {
         return courseIdTracker.current();
-    }
-
-    /// @dev rough calculation used for frontend work
-    function getLearnerCourseEligibleFunds(address learner, uint256 _courseId)
-        external
-        view
-        returns (uint256)
-    {
-        uint256 checkPointReached = verify(learner, _courseId);
-        uint256 checkPointRedeemed = learnerData[_courseId][learner]
-            .checkpointReached;
-        if (checkPointReached <= checkPointRedeemed) {
-            return 0;
-        }
-        uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-        uint256 eligibleFunds = (courses[_courseId].fee /
-            courses[_courseId].checkpoints) *
-            (checkPointReached - checkPointRedeemed);
-        if (batchId_ == batchIdTracker.current()) {
-            return eligibleFunds;
-        } else {
-            uint256 temp = (eligibleFunds * 1e18) / batchTotal[batchId_];
-            uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
-            I_Vault vault = I_Vault(
-                batchYieldAddress[
-                    learnerData[_courseId][msg.sender].yieldBatchId
-                ]
-            );
-            return (eligibleShares * vault.pricePerShare()) / 1e18;
-        }
-    }
-
-    /// @dev rough calculation used for frontend work
-    function getLearnerCourseFundsRemaining(address learner, uint256 _courseId)
-        external
-        view
-        returns (uint256)
-    {
-        uint256 checkPointReached = verify(learner, _courseId);
-        uint256 checkPointRedeemed = learnerData[_courseId][learner]
-            .checkpointReached;
-        uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-        uint256 eligibleFunds = (courses[_courseId].fee /
-            courses[_courseId].checkpoints) *
-            (courses[_courseId].checkpoints - checkPointRedeemed);
-        if (batchId_ == batchIdTracker.current()) {
-            return eligibleFunds;
-        } else {
-            uint256 temp = (eligibleFunds * 1e18) / batchTotal[batchId_];
-            uint256 eligibleShares = (temp * batchYieldTotal[batchId_]) / 1e18;
-            I_Vault vault = I_Vault(
-                batchYieldAddress[
-                    learnerData[_courseId][msg.sender].yieldBatchId
-                ]
-            );
-            return (eligibleShares * vault.pricePerShare()) / 1e18;
-        }
     }
 
     function getCourseUrl(uint256 _courseId)

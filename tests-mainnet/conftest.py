@@ -44,8 +44,7 @@ def contracts_with_courses(contracts, steward):
     for n in range(5):
         tx = deschool.createCourse(
         constants_mainnet.FEE,
-        constants_mainnet.CHECKPOINTS,
-        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.DURATION,
         constants_mainnet.URL,
         steward,
         {"from": steward}

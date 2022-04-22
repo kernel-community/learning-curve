@@ -7,8 +7,7 @@ def test_full(deployer, learners, steward, contracts, token):
 
     tx = deschool.createCourse(
         constants_unit.FEE,
-        constants_unit.CHECKPOINTS,
-        constants_unit.CHECKPOINT_BLOCK_SPACING,
+        constants_unit.DURATION,
         constants_unit.URL,
         constants_unit.CREATOR,
         {"from": steward}
@@ -16,9 +15,8 @@ def test_full(deployer, learners, steward, contracts, token):
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
-    assert tx.events["CourseCreated"]["checkpoints"] == constants_unit.CHECKPOINTS
+    assert tx.events["CourseCreated"]["duration"] == constants_unit.DURATION
     assert tx.events["CourseCreated"]["fee"] == constants_unit.FEE
-    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_unit.CHECKPOINT_BLOCK_SPACING
     assert tx.events["CourseCreated"]["url"] == constants_unit.URL
     assert tx.events["CourseCreated"]["creator"] == constants_unit.CREATOR
 
@@ -39,9 +37,9 @@ def test_full(deployer, learners, steward, contracts, token):
     assert deschool.getCurrentBatchTotal() == constants_unit.FEE * len(learners)
     assert token.balanceOf(deschool) == constants_unit.FEE * len(learners)
 
-    brownie.chain.mine(500)
+    brownie.chain.mine(constants_unit.DURATION)
 
-    assert deschool.verify(learners[0], 0, {"from": steward}) == constants_unit.CHECKPOINTS
+    assert deschool.verify(learners[0], 0, {"from": steward})
 
     for n, learner in enumerate(learners):
         tx = deschool.mint(0, {"from": learner})

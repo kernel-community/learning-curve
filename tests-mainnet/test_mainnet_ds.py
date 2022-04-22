@@ -21,98 +21,25 @@ def test_register_permit(contracts_with_courses, learners, token, deployer):
     assert tx.events["LearnerRegistered"]["courseId"] == 0
 
 
-def test_mint_diff_checkpoints(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
-    deschool, learning_curve = contracts_with_learners
-    tx = deschool.batchDeposit({"from": keeper})
-    for m in range(constants_mainnet.CHECKPOINTS):
-        brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
-        gen_lev_strat.harvest({"from": keeper})
-        for n, learner in enumerate(learners):
-            dai_balance = constants_mainnet.FEE / constants_mainnet.CHECKPOINTS
-            redeemable_dai = deschool.getLearnerCourseEligibleFunds(learner, 0)
-            mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
-            lc_dai_balance = token.balanceOf(learning_curve)
-            us_ydai_balance = ydai.balanceOf(deschool)
-            learner_lc_balance = learning_curve.balanceOf(learner)
-            tx = deschool.mint(0, {"from": learner})
-            assert "LearnMintedFromCourse" in tx.events
-            assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
-            assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - dai_balance) < constants_mainnet.ACCURACY_Y
-            assert deschool.verify(learner, 0) == m + 1
-            assert (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * m) > \
-                   deschool.getLearnerCourseFundsRemaining(learner, 0) > \
-                   (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * (m + 2))
-            assert deschool.getLearnerCourseEligibleFunds(learner, 0) == 0
-            assert abs(token.balanceOf(learning_curve) - (lc_dai_balance + dai_balance)) < constants_mainnet.ACCURACY_Y
-            assert ydai.balanceOf(deschool) < us_ydai_balance
-            assert abs(learning_curve.balanceOf(learner) - (learner_lc_balance + mintable_balance)) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(deschool) == deschool.getYieldRewards(steward)
-    assert ydai.balanceOf(deschool) < 1000
-
-
 def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_lev_strat, ydai):
     deschool, learning_curve = contracts_with_learners
-    brownie.chain.mine(constants_mainnet.CHECKPOINTS * constants_mainnet.CHECKPOINT_BLOCK_SPACING)
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
     tx = deschool.batchDeposit({"from": keeper})
-    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
+    brownie.chain.mine(constants_mainnet.DURATION)
     brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
     for n, learner in enumerate(learners):
-        dai_balance = deschool.getLearnerCourseEligibleFunds(learner, 0)
         us_ydai_balance = ydai.balanceOf(deschool)
         tx = deschool.redeem(0, {"from": learner})
         assert "FeeRedeemed" in tx.events
         assert tx.events["FeeRedeemed"]["amount"] == constants_mainnet.FEE
-        assert deschool.verify(learner, 0) == constants_mainnet.CHECKPOINTS
-        assert deschool.getLearnerCourseEligibleFunds(learner, 0) == 0
+        assert deschool.verify(learner, 0)
         assert token.balanceOf(steward) == 0
         assert deschool.getYieldRewards(steward, {"from": steward}) > 0
         assert ydai.balanceOf(deschool) < us_ydai_balance
         assert token.balanceOf(learner) == constants_mainnet.FEE
         assert token.balanceOf(learning_curve) == 1e18
         assert ydai.balanceOf(learning_curve) == 0
-    kt_redemption = deschool.getYieldRewards(steward, {"from": steward})
-    deschool.withdrawYieldRewards({"from": steward})
-    assert deschool.getYieldRewards(steward, {"from": steward}) == 0
-    assert token.balanceOf(steward) == kt_redemption
-    assert token.balanceOf(deschool) == 0
-    assert ydai.balanceOf(deschool) < 1000
-
-
-def test_redeem_diff_checkpoints(
-        contracts_with_learners,
-        learners,
-        token,
-        steward,
-        keeper,
-        gen_lev_strat,
-        ydai
-):
-    deschool, learning_curve = contracts_with_learners
-    tx = deschool.batchDeposit({"from": keeper})
-    for m in range(constants_mainnet.CHECKPOINTS):
-        brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
-        brownie.chain.sleep(100)
-        gen_lev_strat.harvest({"from": keeper})
-        for n, learner in enumerate(learners):
-            dai_balance = deschool.getLearnerCourseEligibleFunds(learner, 0)
-            kt_dai_balance = deschool.getYieldRewards(steward, {"from": steward})
-            us_ydai_balance = ydai.balanceOf(deschool)
-            tx = deschool.redeem(0, {"from": learner})
-            assert "FeeRedeemed" in tx.events
-            assert abs(tx.events["FeeRedeemed"]["amount"] - dai_balance) - \
-                   (deschool.getYieldRewards(steward, {"from": steward}) - kt_dai_balance) \
-                   < constants_mainnet.ACCURACY_Y
-            assert deschool.verify(learner, 0) == m + 1
-            assert (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * m) > \
-                   deschool.getLearnerCourseFundsRemaining(learner, 0) > \
-                   (constants_mainnet.FEE - (constants_mainnet.FEE / constants_mainnet.CHECKPOINTS) * (m + 2))
-            assert deschool.getLearnerCourseEligibleFunds(learner, 0) == 0
-            assert deschool.getYieldRewards(steward, {"from": steward}) > kt_dai_balance
-            assert ydai.balanceOf(deschool) < us_ydai_balance
-            assert token.balanceOf(learning_curve) == 1e18
-            assert ydai.balanceOf(learning_curve) == 0
-
     kt_redemption = deschool.getYieldRewards(steward, {"from": steward})
     deschool.withdrawYieldRewards({"from": steward})
     assert deschool.getYieldRewards(steward, {"from": steward}) == 0
@@ -181,25 +108,23 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
 
 def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ydai, steward):
     deschool, learning_curve = contracts_with_learners
-    brownie.chain.mine(constants_mainnet.CHECKPOINTS * constants_mainnet.CHECKPOINT_BLOCK_SPACING)
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
     tx = deschool.batchDeposit({"from": keeper})
-    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
+    brownie.chain.mine(constants_mainnet.DURATION)
     brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
 
     for n, learner in enumerate(learners):
-        dai_balance = constants_mainnet.FEE
-        mintable_balance = learning_curve.getMintableForReserveAmount(dai_balance)
+        mintable_balance = learning_curve.getMintableForReserveAmount(constants_mainnet.FEE)
         lc_dai_balance = token.balanceOf(learning_curve)
         us_dai_balance = token.balanceOf(deschool)
         learner_lc_balance = learning_curve.balanceOf(learner)
         tx = deschool.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
         assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
-        assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - dai_balance) < constants_mainnet.ACCURACY_Y
-        assert deschool.verify(learner, 0) == constants_mainnet.CHECKPOINTS
-        assert deschool.getLearnerCourseEligibleFunds(learner, 0) == 0
-        assert abs(token.balanceOf(learning_curve) - lc_dai_balance - dai_balance) < constants_mainnet.ACCURACY_Y
+        assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - constants_mainnet.FEE) < constants_mainnet.ACCURACY_Y
+        assert deschool.verify(learner, 0)
+        assert abs(token.balanceOf(learning_curve) - lc_dai_balance - constants_mainnet.FEE) < constants_mainnet.ACCURACY_Y
         assert abs(token.balanceOf(deschool) - deschool.getYieldRewards(steward)) < constants_mainnet.ACCURACY
         assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
     assert token.balanceOf(deschool) == deschool.getYieldRewards(steward)
@@ -210,9 +135,9 @@ def test_verify(contracts_with_learners, learners, keeper):
     deschool, learning_curve = contracts_with_learners
     learner = learners[0]
     tx = deschool.batchDeposit({"from": keeper})
-    for n in range(constants_mainnet.CHECKPOINTS + 1):
-        assert deschool.verify(learner, 0, {"from": learner}) == n
-        brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING)
+    assert not(deschool.verify(learner, 0, {"from": learner}))
+    brownie.chain.mine(constants_mainnet.DURATION)
+    assert deschool.verify(learner, 0, {"from": learner})
 
 
 def build_permit(holder, spender, token, expiry):

@@ -17,8 +17,7 @@ def test_full_mint(
 
     tx = deschool.createCourse(
         constants_mainnet.FEE,
-        constants_mainnet.CHECKPOINTS,
-        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.DURATION,
         constants_mainnet.URL,
         constants_mainnet.CREATOR,
         {"from": steward}
@@ -26,9 +25,8 @@ def test_full_mint(
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
-    assert tx.events["CourseCreated"]["checkpoints"] == constants_mainnet.CHECKPOINTS
     assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
-    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
+    assert tx.events["CourseCreated"]["duration"] == constants_mainnet.DURATION
     assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
     assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
     assert deschool.getNextCourseId() == 1
@@ -50,12 +48,12 @@ def test_full_mint(
     assert deschool.getCurrentBatchTotal() == constants_mainnet.FEE * len(learners)
     assert dai.balanceOf(deschool) == constants_mainnet.FEE * len(learners)
     tx = deschool.batchDeposit({"from": kernelTreasury})
-    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 5)
+    brownie.chain.mine(constants_mainnet.DURATION)
     gen_lev_strat.harvest({"from": keeper})
     assert dai.balanceOf(deschool) == 0
     assert deschool.getCurrentBatchId() == 1
     assert ydai.balanceOf(deschool) > 0
-    assert deschool.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
+    assert deschool.verify(learners[0], 0, {"from": steward})
     print("----- MINT -----")
     for n, learner in enumerate(learners):
         tx = deschool.mint(0, {"from": learner})
@@ -101,8 +99,7 @@ def test_full_redeem(
 
     tx = deschool.createCourse(
         constants_mainnet.FEE,
-        constants_mainnet.CHECKPOINTS,
-        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        constants_mainnet.DURATION,
         constants_mainnet.URL,
         constants_mainnet.CREATOR,
         {"from": steward}
@@ -110,9 +107,10 @@ def test_full_redeem(
 
     assert "CourseCreated" in tx.events
     assert tx.events["CourseCreated"]["courseId"] == 0
-    assert tx.events["CourseCreated"]["checkpoints"] == constants_mainnet.CHECKPOINTS
+    assert tx.events["CourseCreated"]["duration"] == constants_mainnet.DURATION
     assert tx.events["CourseCreated"]["fee"] == constants_mainnet.FEE
-    assert tx.events["CourseCreated"]["checkpointBlockSpacing"] == constants_mainnet.CHECKPOINT_BLOCK_SPACING
+    assert tx.events["CourseCreated"]["url"] == constants_mainnet.URL
+    assert tx.events["CourseCreated"]["creator"] == constants_mainnet.CREATOR
     assert deschool.getNextCourseId() == 1
 
     for n, learner in enumerate(learners):
@@ -135,11 +133,11 @@ def test_full_redeem(
     assert dai.balanceOf(deschool) == 0
     assert deschool.getCurrentBatchId() == 1
     assert ydai.balanceOf(deschool) > 0
-    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 2)
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
     gen_lev_strat.harvest({"from": keeper})
-    brownie.chain.mine(constants_mainnet.CHECKPOINT_BLOCK_SPACING * 3)
+    brownie.chain.mine(constants_mainnet.DURATION)
 
-    assert deschool.verify(learners[0], 0, {"from": steward}) == constants_mainnet.CHECKPOINTS
+    assert deschool.verify(learners[0], 0, {"from": steward})
     print("----- REDEEM -----")
     for n, learner in enumerate(learners):
         tx = deschool.redeem(0, {"from": learner})
