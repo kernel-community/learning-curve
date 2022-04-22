@@ -74,7 +74,7 @@ contract DeSchool {
     using Counters for Counters.Counter;
 
     struct Course {
-        uint256 beginBlock;
+        uint256 beginBlock; // a block number we use to enable perpetual scholarships
         uint256 fee; // the fee for entering the course
         uint256 duration; // the duration of the course, in number of blocks
         uint256 scholars; // the number of scholarships the amount creates for this course
