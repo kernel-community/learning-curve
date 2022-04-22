@@ -65,7 +65,7 @@ interface IERC20Permit {
 }
 /**
  * @title DeSchool
- * @author kjr217
+ * @author kjr217, cryptowanderer
  * @notice Deploys new courses and interacts with the learning curve directly to mint LEARN.
  */
 
@@ -195,11 +195,11 @@ contract DeSchool {
     }
 
     /**
-     * @notice                         create a course
-     * @param  _fee                    fee for a learner to register
-     * @param  _duration               the duration of the course, in number of blocks
-     * @param  _url                    url leading to course details
-     * @param  _creator                the address that excess yield will be sent to on a redeem
+     * @notice            create a course
+     * @param  _fee       fee for a learner to register
+     * @param  _duration  the duration of the course, in number of blocks
+     * @param  _url       url leading to course details
+     * @param  _creator   the address that excess yield will be sent to on a redeem
      */
     function createCourse(
         uint256 _fee,
@@ -239,12 +239,14 @@ contract DeSchool {
     }
 
     /**
-     * @notice this method allows anyone to create perpetual scholarships by staking
-     *         capital for learners to use. The can claim it back at any time.
+     * @notice           this method allows anyone to create perpetual scholarships by staking
+     *                   capital for learners to use. The can claim it back at any time.
      * @param  _courseId courseId the donor would like to fund
-     * @param  _amount the amount in DAI that the donor wishes to give
+     * @param  _amount   the amount in DAI that the donor wishes to give
      */
-    function createScholarships(uint256 _courseId, uint256 _amount) external {
+    function createScholarships(uint256 _courseId, uint256 _amount) 
+        external 
+    {
         require(
             _amount >= 1000, 
             "createScholarships: must seed scholarship with enough funds to justify gas costs"
@@ -293,7 +295,9 @@ contract DeSchool {
      *         funds in a specific "batch" to yearn, allowing the funds to gain
      *         interest.
      */
-    function batchDeposit() external {
+    function batchDeposit() 
+        external 
+    {
         uint256 batchId_ = batchIdTracker.current();
         // initiate the next batch
         uint256 batchAmount_ = batchTotal[batchId_];
@@ -311,11 +315,18 @@ contract DeSchool {
     }
 
     /**
-     * @notice called by anyone to refresh scholar numbers if previous scholars have completed the course
+     * @notice           called by anyone to refresh scholar numbers if previous scholars have completed the course
      * @param  _courseId courseId to be checked for possible new scholarship slots. Used here because we don't expect UIs to store scholarshipIds,
      *                   only courseIds.
+     * @return scholars  the number of scholarship slots which have been reopened once previousScholars have completed the course, where completed is
+     *                   defined not in terms of assessment or merit, just in number of blocks passed. The core concept here is that, with perpetual
+     *                   scholarships, we need not assess outcomes or merit, because we are not consuming the money, just leveraging its presence in
+     *                   a shared vault to enable perpetual, collective learning.
      */
-    function checkScholarships(uint256 _courseId) external returns (uint256 scholars) {
+    function checkScholarships(uint256 _courseId) 
+        external 
+        returns (uint256 scholars) 
+    {
         Course memory course = courses[_courseId]; 
         uint256 finishedBlock = block.number - course.duration;
 
@@ -331,10 +342,12 @@ contract DeSchool {
     }
 
     /**
-     * @notice handles scholar registration if there are scholarship available
+     * @notice           handles scholar registration if there are scholarship available
      * @param  _courseId courseId the scholar would like to register to
      */
-    function registerScholar(uint256 _courseId) public {
+    function registerScholar(uint256 _courseId) 
+        public 
+    {
         require(
             _courseId < courseIdTracker.current(),
             "registerScholar: courseId does not exist"
@@ -359,12 +372,15 @@ contract DeSchool {
     }
 
     /**
-     * @notice allows donor to withdraw their scholarship donation, or a portion thereof, at any point
-     *         Q: what happens if there are still learners registered for the course and the scholarship is withdrawn from under them?
-     *         A: allow them to complete the course, but allow no new scholars after withdraw takes place.       
+     * @notice          allows donor to withdraw their scholarship donation, or a portion thereof, at any point
+     *                  Q: what happens if there are still learners registered for the course and the scholarship is withdrawn from under them?
+     *                  A: allow them to complete the course, but allow no new scholars after withdraw takes place.       
      * @param _courseId the id of the course from which the scholarship is to be withdrawn.
+     * @param _amount   the amount that the scholarship provider wishes to withdraw
      */
-    function withdrawScholarship(uint256 _courseId, uint256 _amount) public {
+    function withdrawScholarship(uint256 _courseId, uint256 _amount) 
+        public 
+    {
         require(
             providerData[_courseId][msg.sender].amount <= _amount,
             "withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"
@@ -393,10 +409,12 @@ contract DeSchool {
     }
 
     /**
-     * @notice handles learner registration
+     * @notice           handles learner registration in the case that no scholarships are available
      * @param  _courseId course id the learner would like to register to
      */
-    function register(uint256 _courseId) public {
+    function register(uint256 _courseId) 
+        public 
+    {
         require(
             _courseId < courseIdTracker.current(),
             "register: courseId does not exist"
@@ -419,17 +437,32 @@ contract DeSchool {
             msg.sender
         );
     }
+
     /**
-     * @notice handles learner registration with permit for approval
+     * @notice          handles learner registration with permit. This enable learners to register with only one transaction,
+     *                  rather than two, i.e. approve DeSchool to spend your DAI, and only then register. This saves gas for
+     *                  learners and improves the UX.
+     * @param _courseId the course for which the learner wishes to register
+     * @param nonce     provided in the 2616 standard for replay protection.
+     * @param expiry    the current blocktime must be less than or equal to this for a valid transaction
+     * @param v         a recovery identity variable included in Ethereum, in addition to the r and s below which are standard ECDSA parameters
+     * @param r         standard ECDSA parameter
+     * @param s         standard ECDSA parameter
      */
-    function permitAndRegister(uint256 _courseId, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) external {
+    function permitAndRegister(
+        uint256 _courseId, 
+        uint256 nonce, 
+        uint256 expiry, 
+        uint8 v, 
+        bytes32 r, 
+        bytes32 s
+    ) external {
         IERC20Permit(address(stable)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
         register(_courseId);
     }
 
     /**
-     * @notice           handles checkpoint verification
-     *                   All course are deployed with a duration in blocks, after which learners
+     * @notice           All course are deployed with a duration in blocks, after which learners
      *                   can either claim their fee back, or use it to mint LEARN
      *
      *                   This is a helper function that checks where a learner is
@@ -468,7 +501,9 @@ contract DeSchool {
      *
      * @param  _courseId course id to redeem the fee from
      */
-    function redeem(uint256 _courseId) external {
+    function redeem(uint256 _courseId) 
+        external 
+    {
         uint256 shares;
         uint256 learnerShares;
         require(
@@ -494,11 +529,19 @@ contract DeSchool {
                 emit FeeRedeemed(_courseId, msg.sender, courses[_courseId].fee);
                 stable.safeTransfer(msg.sender, courses[_courseId].fee);
             } else {
-                emit FeeRedeemed(_courseId, msg.sender, shares);
+                emit FeeRedeemed(
+                    _courseId, 
+                    msg.sender, 
+                    shares
+                );
                 stable.safeTransfer(msg.sender, shares);
             }
         } else {
-            emit FeeRedeemed(_courseId, msg.sender, courses[_courseId].fee);
+            emit FeeRedeemed(
+                _courseId, 
+                msg.sender, 
+                courses[_courseId].fee
+            );
             stable.safeTransfer(msg.sender, courses[_courseId].fee);
         }
     }
@@ -512,7 +555,9 @@ contract DeSchool {
      *                   All the resulting LEARN tokens are returned to the learner.
      * @param  _courseId course id to mint LEARN from
      */
-    function mint(uint256 _courseId) external {
+    function mint(uint256 _courseId) 
+        external 
+    {
         uint256 shares;
         uint256 learnerShares;
         require(
@@ -559,11 +604,17 @@ contract DeSchool {
     }
 
     /**
-     * @notice Gets the amount of dai that an address is eligible, addresses become eligible if
-     *         they are the designated reward receiver for a specific course and a learner on that
-     *         course decided to redeem, meaning yield was reserved for the reward receiver
+     * @notice          Gets the yield a creator can claim, which comes from two sources.
+     *                  There may be yield from scholarships provided for their course, which is assigned as
+     *                  the scholarship is created and may be claimed at any time thereafter.
+     *                  There may also be yield from any learners who have registered in the case no scholarships are available.
+     *                  When the learner decides to redeem or mint their staked fee, this yield is assigned to the creator.
+     * @param _courseId only course creators can claim yield. The information for how much yield they can claim
+     *                  is always accessible via the courseId.
      */
-    function withdrawYieldRewards(uint256 _courseId) external {
+    function withdrawYieldRewards(uint256 _courseId) 
+        external 
+    {
         uint256 withdrawableReward;
         // if there is yield from scholarships, withdraw it all
         if (courses[_courseId].scholarshipYield != 0) {
@@ -578,9 +629,9 @@ contract DeSchool {
     }
 
     /**
-     * @notice                check whether the fee a learner staked has been deployed to a Yearn vault
-     * @param  _courseId      course id to redeem fee or mint LEARN from
-     * @return deployed       whether the funds to be redeemed were deployed to yearn
+     * @notice           check whether the fee a learner staked has been deployed to a Yearn vault
+     * @param  _courseId course id to redeem fee or mint LEARN from
+     * @return deployed  whether the funds to be redeemed were deployed to yearn
      */
     function isDeployed(uint256 _courseId)
         internal
@@ -595,12 +646,20 @@ contract DeSchool {
         }
     }
 
-    function getScholars(uint256 _courseId) external view returns (uint256) {
+    function getScholars(uint256 _courseId) 
+        external 
+        view 
+        returns (uint256) 
+    {
         Course memory course = courses[_courseId];
         return course.scholars;
     }
 
-    function getCurrentBatchTotal() external view returns (uint256) {
+    function getCurrentBatchTotal() 
+        external 
+        view 
+        returns (uint256) 
+    {
         return batchTotal[batchIdTracker.current()];
     }
 
@@ -612,11 +671,19 @@ contract DeSchool {
         return learnerData[courseId][learner].blockRegistered;
     }
 
-    function getCurrentBatchId() external view returns (uint256) {
+    function getCurrentBatchId() 
+        external 
+        view 
+        returns (uint256) 
+    {
         return batchIdTracker.current();
     }
 
-    function getNextCourseId() external view returns (uint256) {
+    function getNextCourseId() 
+        external 
+        view 
+        returns (uint256) 
+    {
         return courseIdTracker.current();
     }
 
@@ -628,7 +695,11 @@ contract DeSchool {
         return courses[_courseId].url;
     }
 
-    function getYieldRewards(uint256 _courseId) public view returns (uint256) {
+    function getYieldRewards(uint256 _courseId) 
+        public 
+        view 
+        returns (uint256) 
+    {
         uint256 yield = yieldRewards[courses[_courseId].creator] + courses[_courseId].scholarshipYield;
         return yield;
     }
