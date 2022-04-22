@@ -320,7 +320,7 @@ contract DeSchool {
 
     /**
      * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars completed the course
-     * @param  _courseId courseId to be checked for possible new scholarship slots.
+     * @param  _courseId course id to be checked for possible new scholarship slots.
      * @return scholars  the number of scholarship slots which have been reopened once previousScholars have completed the course, where completed is
      *                   defined not in terms of assessment or merit, just in number of blocks passed. The core concept here is that, with perpetual
      *                   scholarships, we need not assess outcomes or merit, because we are not consuming the money, just leveraging its presence in
@@ -354,7 +354,7 @@ contract DeSchool {
 
     /**
      * @notice           handles scholar registration if there are scholarship available
-     * @param  _courseId courseId the scholar would like to register to
+     * @param  _courseId course id the scholar would like to register to
      */
     function registerScholar(uint256 _courseId) 
         public 
@@ -386,7 +386,7 @@ contract DeSchool {
      * @notice          allows donor to withdraw their scholarship donation, or a portion thereof, at any point
      *                  Q: what happens if there are still learners registered for the course and the scholarship is withdrawn from under them?
      *                  A: allow them to complete the course, but allow no new scholars after withdraw takes place.       
-     * @param _courseId the id of the course from which the scholarship is to be withdrawn.
+     * @param _courseId course id from which the scholarship is to be withdrawn.
      * @param _amount   the amount that the scholarship provider wishes to withdraw
      */
     function withdrawScholarship(uint256 _courseId, uint256 _amount) 
@@ -453,7 +453,7 @@ contract DeSchool {
      * @notice          handles learner registration with permit. This enable learners to register with only one transaction,
      *                  rather than two, i.e. approve DeSchool to spend your DAI, and only then register. This saves gas for
      *                  learners and improves the UX.
-     * @param _courseId the course for which the learner wishes to register
+     * @param _courseId course id for which the learner wishes to register
      * @param nonce     provided in the 2616 standard for replay protection.
      * @param expiry    the current blocktime must be less than or equal to this for a valid transaction
      * @param v         a recovery identity variable included in Ethereum, in addition to the r and s below which are standard ECDSA parameters
