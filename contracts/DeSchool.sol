@@ -80,10 +80,12 @@ contract DeSchool {
         uint256 scholars; // the number of scholarships the amount creates for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
+        address scholarshipVault; // one scholarship vault per course, any new scholarships are simply added to it
+        uint256 scholarshipYield; // the yield, in yTokens, earned by the course creator from scholarships
     }
 
     struct Provider {
-        uint256 amount; // the amount provided for scholarships for this particular course
+        uint256 amount; // the amount provided for scholarships for this particular course 
     }
 
     struct Scholar {
@@ -109,7 +111,6 @@ contract DeSchool {
     mapping(uint256 => mapping(address => Provider)) providerData;
     // containg previousScholar data mapped by a courseId and address
     mapping(uint256 => mapping(address => Scholar)) previousScholar;
-    
 
     // containing the total underlying amount for a yield batch mapped by batchId
     mapping(uint256 => uint256) batchTotal;
@@ -117,11 +118,6 @@ contract DeSchool {
     mapping(uint256 => uint256) batchYieldTotal;
     // containing the vault address of the the yield token for a yield batch mapped by batchId
     mapping(uint256 => address) batchYieldAddress;
-
-    // containing the total amount of yield token for a yield scholarship mapped by scholarshipId
-    mapping(uint256 => uint256) scholarshipYieldTotal;
-    // containing the vault address of the the yield token for a yield scholarship mapped by scholarshipId
-    mapping(uint256 => address) scholarshipYieldAddress;
 
     // yield rewards for an eligible address
     mapping(address => uint256) yieldRewards;
@@ -150,7 +146,9 @@ contract DeSchool {
         uint256 indexed courseId,
         uint256 scholarshipAmount,
         uint256 numScholars,
-        address scholarshipProvider
+        address scholarshipProvider,
+        address scholarshipVault,
+        uint256 scholarshipYield
     );
     event ScholarRegistered(
         uint256 indexed courseId, 
@@ -226,7 +224,9 @@ contract DeSchool {
             _duration,
             0,
             _url,
-            _creator
+            _creator,
+            address(0),
+            0
         );
         emit CourseCreated(
             courseId_,
@@ -253,21 +253,26 @@ contract DeSchool {
             _courseId < courseIdTracker.current(),
             "createScholarships: courseId does not exist"
         );
+        Course storage course = courses[_courseId];
 
-        // get the address of the vault from the yRegistry
-        I_Vault vault = I_Vault(registry.latestVault(address(stable)));
-        // approve the vault
-        stable.approve(address(vault), _amount);
-        // // transfer the amount directly into a vault in order to save gas fees and mint y from the vault
-        uint256 yTokens = vault.deposit(_amount);
-
-        // TODO: how to ensure that the courseCreator can claim the yield? 
+        // get the address of the scholarshipVault if it exists, otherwise get the latest vault from the yRegistry
+        // transfer the amount directly into the relevant vault in order to save gas fees. Then mint y from the vault.
+        if (course.scholarshipVault != address(0)) {
+            I_Vault vault = I_Vault(course.scholarshipVault);
+            stable.approve(course.scholarshipVault, _amount);
+            course.scholarshipYield += vault.deposit(_amount);
+        } else {
+            I_Vault newVault = I_Vault(registry.latestVault(address(stable)));
+            stable.approve(address(newVault), _amount);
+            uint256 yTokens = newVault.deposit(_amount);
+            course.scholarshipYield = yTokens;
+            course.scholarshipVault = address(newVault);
+        }
 
         // set providerData to ensure withdrawals are possible
         providerData[_courseId][msg.sender].amount = _amount;
 
         // calculate how many scholarships can be awarded based on amount provided
-        Course memory course = courses[_courseId];
         uint256 newScholars = _amount / course.fee;
         course.scholars += newScholars;
 
@@ -275,7 +280,9 @@ contract DeSchool {
             _courseId,
             _amount,
             newScholars,
-            msg.sender
+            msg.sender,
+            course.scholarshipVault,
+            course.scholarshipYield
         );
     }
 
@@ -363,7 +370,12 @@ contract DeSchool {
             "withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"
         );
         Course memory course =  courses[_courseId];
+        I_Vault vault = I_Vault(course.scholarshipVault);
         uint256 scholarsRemoved = course.fee / _amount;
+
+        // first, mark down the amount provided
+        providerData[_courseId][msg.sender].amount -= _amount;
+
         // check, as provider could withdraw full amount while scholars are still registered, potentially causing solidity weirdness.
         if (scholarsRemoved > course.scholars) {
             course.scholars = 0;
@@ -375,7 +387,8 @@ contract DeSchool {
             _amount,
             scholarsRemoved
         );
-        // TODO: make this actually work by withdrawing from the vault first, then sending to the scholarship provider
+        // withdraw amount from scholarshipVault for this course and return to provider
+        vault.withdraw(_amount);
         stable.safeTransfer(msg.sender, _amount);
     }
 
@@ -492,10 +505,11 @@ contract DeSchool {
 
     /**
      * @notice           handles learner minting new LEARN
-     *                   checks via verify() what proportion of the fee to send to the
-     *                   Learning Curve, any yield earned on the original fee is sent to
-     *                   the creator's designated address, and returns all
-     *                   the resulting LEARN tokens to the learner.
+     *                   checks via verify() that the original fee can be redeemed and used
+     *                   to mint via the Learning Curve.
+     *                   Any yield earned on the original fee is sent to
+     *                   the creator's designated address.
+     *                   All the resulting LEARN tokens are returned to the learner.
      * @param  _courseId course id to mint LEARN from
      */
     function mint(uint256 _courseId) external {
@@ -549,11 +563,18 @@ contract DeSchool {
      *         they are the designated reward receiver for a specific course and a learner on that
      *         course decided to redeem, meaning yield was reserved for the reward receiver
      */
-    function withdrawYieldRewards() external {
-        uint256 withdrawableReward = getYieldRewards(msg.sender);
-        yieldRewards[msg.sender] = 0;
-        emit YieldRewardRedeemed(msg.sender, withdrawableReward);
-        stable.safeTransfer(msg.sender, withdrawableReward);
+    function withdrawYieldRewards(uint256 _courseId) external {
+        uint256 withdrawableReward;
+        // if there is yield from scholarships, withdraw it all
+        if (courses[_courseId].scholarshipYield != 0) {
+            withdrawableReward = courses[_courseId].scholarshipYield;
+            courses[_courseId].scholarshipYield = 0;
+        }
+        // add to the withdrawableRewards any yield from learner deposits who are not scholars
+        withdrawableReward += getYieldRewards(_courseId);
+        yieldRewards[courses[_courseId].creator] = 0;
+        emit YieldRewardRedeemed(courses[_courseId].creator, withdrawableReward);
+        stable.safeTransfer(courses[_courseId].creator, withdrawableReward);
     }
 
     /**
@@ -607,7 +628,8 @@ contract DeSchool {
         return courses[_courseId].url;
     }
 
-    function getYieldRewards(address redeemer) public view returns (uint256) {
-        return yieldRewards[redeemer];
+    function getYieldRewards(uint256 _courseId) public view returns (uint256) {
+        uint256 yield = yieldRewards[courses[_courseId].creator] + courses[_courseId].scholarshipYield;
+        return yield;
     }
 }
