@@ -154,6 +154,10 @@ contract DeSchool {
         uint256 indexed courseId, 
         address scholar
     );
+    event ScholarshipsReopened (
+        uint256 indexed courseId,
+        uint256 scolars
+    );
     event ScholarshipWithdrawn(
         uint256 scholarshipId,
         uint256 scholarshipAmount,
@@ -315,19 +319,19 @@ contract DeSchool {
     }
 
     /**
-     * @notice           called by anyone to refresh scholar numbers if previous scholars have completed the course
-     * @param  _courseId courseId to be checked for possible new scholarship slots. Used here because we don't expect UIs to store scholarshipIds,
-     *                   only courseIds.
+     * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars completed the course
+     * @param  _courseId courseId to be checked for possible new scholarship slots.
      * @return scholars  the number of scholarship slots which have been reopened once previousScholars have completed the course, where completed is
      *                   defined not in terms of assessment or merit, just in number of blocks passed. The core concept here is that, with perpetual
      *                   scholarships, we need not assess outcomes or merit, because we are not consuming the money, just leveraging its presence in
      *                   a shared vault to enable perpetual, collective learning.
      */
-    function checkScholarships(uint256 _courseId) 
+    function perpetualScholars(uint256 _courseId) 
         external 
         returns (uint256 scholars) 
     {
-        Course memory course = courses[_courseId]; 
+        Course memory course = courses[_courseId];
+        uint256 currentScholars = course.scholars; 
         uint256 checkedBlock = block.number - course.duration;
 
         for (uint256 i; i < course.scholars; i++) {
@@ -340,7 +344,12 @@ contract DeSchool {
         }
         // set the "beginning" block to be the last checked block so the above loop doesn't get impossible
         course.beginBlock = checkedBlock;
-        return course.scholars;
+        uint newScholars = course.scholars - currentScholars;
+        emit ScholarshipsReopened(
+            _courseId,
+            newScholars
+        );
+        return newScholars;
     }
 
     /**
@@ -426,7 +435,7 @@ contract DeSchool {
             learnerData[_courseId][msg.sender].blockRegistered == 0,
             "register: already registered"
         );
-        Course storage course = courses[_courseId];
+        Course memory course = courses[_courseId];
 
         stable.safeTransferFrom(msg.sender, address(this), course.fee);
 
