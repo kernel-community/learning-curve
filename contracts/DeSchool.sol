@@ -90,7 +90,7 @@ contract DeSchool {
 
     struct Scholar {
         address scholar; // used to decide when a new scholarship can be made available
-        bool completed; //used to ensure same address cannot claim scholarship twice
+        bool registered; //used to ensure same address cannot claim scholarship twice
     }
 
     struct Learner {
@@ -100,8 +100,6 @@ contract DeSchool {
 
     // containing course data mapped by a courseId
     mapping(uint256 => Course) public courses;
-    // containing scholarship provider data mapped by a courseId
-    mapping(uint256 => Provider) public providers;
 
     // containing learner data mapped by a courseId and address
     mapping(uint256 => mapping(address => Learner)) learnerData;
@@ -109,8 +107,8 @@ contract DeSchool {
     mapping(uint256 => mapping(uint256 => Scholar)) scholarData;
     // containing scholarship provider data mapped by courseId and address
     mapping(uint256 => mapping(address => Provider)) providerData;
-    // containg previousScholar data mapped by a courseId and address
-    mapping(uint256 => mapping(address => Scholar)) previousScholar;
+    // containg currentScholar data mapped by a courseId and address
+    mapping(uint256 => mapping(address => Scholar)) currentScholar;
 
     // containing the total underlying amount for a yield batch mapped by batchId
     mapping(uint256 => uint256) batchTotal;
@@ -252,7 +250,7 @@ contract DeSchool {
         external 
     {
         require(
-            _amount >= 1000, 
+            _amount >= 1 * 1e21, 
             "createScholarships: must seed scholarship with enough funds to justify gas costs"
         );
         require(
@@ -260,19 +258,20 @@ contract DeSchool {
             "createScholarships: courseId does not exist"
         );
         Course storage course = courses[_courseId];
+        // TODO: can we transfer the amount directly into the relevant vault via permit() in order to save gas fees?
+        stable.safeTransferFrom(msg.sender, address(this), _amount);
 
         // get the address of the scholarshipVault if it exists, otherwise get the latest vault from the yRegistry
-        // transfer the amount directly into the relevant vault in order to save gas fees. Then mint y from the vault.
         if (course.scholarshipVault != address(0)) {
             I_Vault vault = I_Vault(course.scholarshipVault);
             stable.approve(course.scholarshipVault, _amount);
             course.scholarshipYield += vault.deposit(_amount);
         } else {
             I_Vault newVault = I_Vault(registry.latestVault(address(stable)));
-            stable.approve(address(newVault), _amount);
+            course.scholarshipVault = address(newVault);
+            stable.approve(course.scholarshipVault, _amount);
             uint256 yTokens = newVault.deposit(_amount);
             course.scholarshipYield = yTokens;
-            course.scholarshipVault = address(newVault);
         }
 
         // set providerData to ensure withdrawals are possible
@@ -319,12 +318,12 @@ contract DeSchool {
     }
 
     /**
-     * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars completed the course
+     * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars are deregistered from the course
      * @param  _courseId course id to be checked for possible new scholarship slots.
-     * @return scholars  the number of scholarship slots which have been reopened once previousScholars have completed the course, where completed is
+     * @return scholars  the number of scholarship slots which have been reopened once currentScholars have completed the course, where completed is
      *                   defined not in terms of assessment or merit, just in number of blocks passed. The core concept here is that, with perpetual
      *                   scholarships, we need not assess outcomes or merit, because we are not consuming the money, just leveraging its presence in
-     *                   a shared vault to enable perpetual, collective learning.
+     *                   a shared vault to enable perpetual, collective learning. Once deregistered, scholars can take the course again if they so choose.
      */
     function perpetualScholars(uint256 _courseId) 
         external 
@@ -337,7 +336,7 @@ contract DeSchool {
         for (uint256 i; i < course.scholars; i++) {
             for (uint256 j = course.checkpoint; j < checkedBlock; j++) {              
                 if (scholarData[_courseId][j].scholar != address(0)) {
-                    scholarData[_courseId][j].completed = true;
+                    scholarData[_courseId][j].registered = false;
                     course.scholars ++;
                 }
             }
@@ -364,8 +363,8 @@ contract DeSchool {
             "registerScholar: courseId does not exist"
         );
         require(
-            !previousScholar[_courseId][msg.sender].completed,
-            "registerScholar: already registered previously"
+            !currentScholar[_courseId][msg.sender].registered,
+            "registerScholar: already registered"
         );
         Course storage course = courses[_courseId];
         require(
@@ -374,6 +373,7 @@ contract DeSchool {
         );
         course.scholars -= 1;
 
+        currentScholar[_courseId][msg.sender].registered = true;
         scholarData[_courseId][block.number].scholar = msg.sender;
         
         emit ScholarRegistered(

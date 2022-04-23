@@ -25,13 +25,13 @@ def deployer():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def contracts(deployer, dai):
-    learning_curve = LearningCurve.deploy(dai.address, {"from": deployer})
-    dai.transfer(deployer, 1e18, {"from": deployer})
-    dai.approve(learning_curve, 1e18, {"from": deployer})
+def contracts(deployer, token):
+    learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
+    token.transfer(deployer, 1e18, {"from": deployer})
+    token.approve(learning_curve, 1e18, {"from": deployer})
     learning_curve.initialise({"from": deployer})
     yield DeSchool.deploy(
-        dai.address,
+        token.address,
         learning_curve.address,
         constants_mainnet.REGISTRY,
         {"from": deployer}), \
@@ -49,6 +49,28 @@ def contracts_with_courses(contracts, steward):
         steward,
         {"from": steward}
         )
+    yield deschool, learning_curve
+
+
+@pytest.fixture(scope="function")
+def contracts_with_scholarships(contracts_with_courses, token, deployer, provider):
+    deschool, learning_curve = contracts_with_courses
+    token.transfer(provider, (constants_mainnet.SCHOLARSHIP_AMOUNT * 5), {"from": deployer})
+    assert token.balanceOf(provider) == (constants_mainnet.SCHOLARSHIP_AMOUNT * 5)
+    token.approve(deschool, (constants_mainnet.SCHOLARSHIP_AMOUNT * 5), {"from": provider})
+    for n in range(5):
+        tx = deschool.createScholarships(
+            n,
+            constants_mainnet.SCHOLARSHIP_AMOUNT,
+            {"from": provider}
+        )
+        assert "ScholarshipCreated" in tx.events
+        assert tx.events["ScholarshipCreated"]["courseId"] == n
+        assert tx.events["ScholarshipCreated"]["scholarshipAmount"] == constants_mainnet.SCHOLARSHIP_AMOUNT
+        assert tx.events["ScholarshipCreated"]["numScholars"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
+        assert tx.events["ScholarshipCreated"]["scholarshipProvider"] == provider
+        # This will only remain true until the registry updates the latestVault, in which case we need to update constants_mainnet
+        assert tx.events["ScholarshipCreated"]["scholarshipVault"] == constants_mainnet.VAULT
     yield deschool, learning_curve
 
 
@@ -73,13 +95,13 @@ def learners(accounts):
 
 
 @pytest.fixture
-def hackerman(accounts):
-    yield accounts[9]
+def provider(accounts):
+    yield accounts[7]
 
 
 @pytest.fixture
-def dai():
-    yield Contract.from_explorer(constants_mainnet.DAI)
+def hackerman(accounts):
+    yield accounts[9]
 
 
 @pytest.fixture
@@ -94,7 +116,7 @@ def ydai():
 
 @pytest.fixture
 def gen_lev_strat():
-    yield Contract.from_explorer("0x6341c289b2E0795A04223DF04B53A77970958723")
+    yield Contract.from_explorer("0x1676055fE954EE6fc388F9096210E5EbE0A9070c")
 
 
 @pytest.fixture

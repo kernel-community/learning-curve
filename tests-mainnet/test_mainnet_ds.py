@@ -6,6 +6,82 @@ from eth_account.messages import encode_structured_data
 from eth_utils import encode_hex
 
 
+def test_create_scholarships(contracts_with_scholarships, token, deployer):
+    deschool, learning_curve = contracts_with_scholarships
+    # provide another scholarship, from a separate account, to the first course
+    token.approve(deschool, (constants_mainnet.SCHOLARSHIP_AMOUNT), {"from": deployer})
+    tx = deschool.createScholarships(
+        0,
+        constants_mainnet.SCHOLARSHIP_AMOUNT,
+        {"from": deployer}
+    )
+    assert "ScholarshipCreated" in tx.events
+    assert tx.events["ScholarshipCreated"]["courseId"] == 0
+    assert tx.events["ScholarshipCreated"]["scholarshipAmount"] == constants_mainnet.SCHOLARSHIP_AMOUNT
+    assert tx.events["ScholarshipCreated"]["numScholars"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
+    assert tx.events["ScholarshipCreated"]["scholarshipProvider"] == deployer
+    # fetch the first course
+    course = deschool.courses(0)
+    # check the "scholars" field in the course struct and ensure it reflects the number of scholars added by both scholarships
+    assert course[3] == (constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE) * 2
+
+
+def test_scholarship_reverts(contracts_with_scholarships, token, deployer, provider):
+    deschool, learning_curve = contracts_with_scholarships
+    token.transfer(provider, (constants_mainnet.SCHOLARSHIP_AMOUNT), {"from": deployer})
+    assert token.balanceOf(provider) == (constants_mainnet.SCHOLARSHIP_AMOUNT)
+    token.approve(deschool, (constants_mainnet.SCHOLARSHIP_AMOUNT), {"from": provider})
+    with brownie.reverts("createScholarships: must seed scholarship with enough funds to justify gas costs"):
+        deschool.createScholarships(
+            0,
+            constants_mainnet.SCHOLARSHIP_AMOUNT / 3,
+            {"from": provider}
+        )
+    with brownie.reverts("createScholarships: courseId does not exist"):
+        deschool.createScholarships(
+            6,
+            constants_mainnet.SCHOLARSHIP_AMOUNT,
+            {"from": provider}
+        )
+
+def test_register_scholar(contracts_with_scholarships, learners):
+    deschool, learning_curve = contracts_with_scholarships
+    for n, learner in enumerate(learners):
+        tx = deschool.registerScholar(
+            n,
+            {"from": learner}
+        )
+        assert "ScholarRegistered" in tx.events
+        assert tx.events["ScholarRegistered"]["courseId"] == n
+        assert tx.events["ScholarRegistered"]["scholar"] == learner
+
+
+def test_register_scholar_reverts(contracts_with_scholarships, learners):
+    deschool, learning_curve = contracts_with_scholarships
+    with brownie.reverts("registerScholar: courseId does not exist"):
+        deschool.registerScholar(
+            6,
+            {"from": learners[0]}
+        )
+    tx = deschool.registerScholar(
+        0,
+        {"from": learners[0]}
+    )
+    with brownie.reverts("registerScholar: already registered"):
+        tx = deschool.registerScholar(
+            0,
+            {"from": learners[0]}
+        )
+    tx = deschool.registerScholar(
+        0,
+        {"from": learners[1]}
+    )
+    with brownie.reverts("registerScholar: no scholarships available for this course"):
+        tx = deschool.registerScholar(
+            0,
+            {"from": learners[2]}
+        )
+
 def test_register_permit(contracts_with_courses, learners, token, deployer):
     deschool, learning_curve = contracts_with_courses
     signer = Account.create()
@@ -29,14 +105,14 @@ def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_l
     brownie.chain.sleep(1000)
     gen_lev_strat.harvest({"from": keeper})
     for n, learner in enumerate(learners):
-        us_ydai_balance = ydai.balanceOf(deschool)
+        ds_ydai_balance = ydai.balanceOf(deschool)
         tx = deschool.redeem(0, {"from": learner})
         assert "StakeRedeemed" in tx.events
         assert tx.events["StakeRedeemed"]["amount"] == constants_mainnet.STAKE
         assert deschool.verify(learner, 0)
         assert token.balanceOf(steward) == 0
         assert deschool.getYieldRewards(steward, {"from": steward}) > 0
-        assert ydai.balanceOf(deschool) < us_ydai_balance
+        assert ydai.balanceOf(deschool) < ds_ydai_balance
         assert token.balanceOf(learner) == constants_mainnet.STAKE
         assert token.balanceOf(learning_curve) == 1e18
         assert ydai.balanceOf(learning_curve) == 0
@@ -56,7 +132,7 @@ def test_batch_success(
         learners
 ):
     deschool, learning_curve = contracts_with_learners
-    us_balance_before = token.balanceOf(deschool)
+    ds_balance_before = token.balanceOf(deschool)
     batch_id_before = deschool.getCurrentBatchId()
     tx = deschool.batchDeposit({"from": keeper})
     assert "BatchDeposited" in tx.events
@@ -65,7 +141,7 @@ def test_batch_success(
            tx.events["BatchDeposited"]["batchId"] == \
            deschool.getCurrentBatchId() - 1
     assert token.balanceOf(deschool) == 0
-    assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE * len(learners)
+    assert ds_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE * len(learners)
     assert ydai.balanceOf(deschool) > 0
     assert ydai.balanceOf(deschool) == tx.events["BatchDeposited"]["batchYieldAmount"]
 
@@ -91,7 +167,7 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
         assert "LearnerRegistered" in tx.events
         assert tx.events["LearnerRegistered"]["courseId"] == 0
         assert before_bal + constants_mainnet.STAKE == token.balanceOf(deschool)
-        us_balance_before = token.balanceOf(deschool)
+        ds_balance_before = token.balanceOf(deschool)
         batch_id_before = deschool.getCurrentBatchId()
         ydai_bal_before = ydai.balanceOf(deschool)
         tx = deschool.batchDeposit({"from": keeper})
@@ -101,7 +177,7 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
                tx.events["BatchDeposited"]["batchId"] == \
                deschool.getCurrentBatchId() - 1
         assert token.balanceOf(deschool) == 0
-        assert us_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE
+        assert ds_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE
         assert ydai.balanceOf(deschool) > ydai_bal_before
         assert ydai.balanceOf(deschool) - ydai_bal_before == tx.events["BatchDeposited"]["batchYieldAmount"]
 
@@ -117,7 +193,7 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
     for n, learner in enumerate(learners):
         mintable_balance = learning_curve.getMintableForReserveAmount(constants_mainnet.STAKE)
         lc_dai_balance = token.balanceOf(learning_curve)
-        us_dai_balance = token.balanceOf(deschool)
+        ds_dai_balance = token.balanceOf(deschool)
         learner_lc_balance = learning_curve.balanceOf(learner)
         tx = deschool.mint(0, {"from": learner})
         assert "LearnMintedFromCourse" in tx.events
