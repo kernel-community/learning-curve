@@ -77,9 +77,9 @@ contract DeSchool {
         uint256 stake; // an amount in DAI to be staked for the duration course
         uint256 duration; // the duration of the course, in number of blocks
         uint256 checkpoint; // a block number we use to enable perpetual scholarships
-        uint256 scholars; // the number of scholarships the amount creates for this course
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
+        uint256 scholars; // the number of scholarships the amount creates for this course
         address scholarshipVault; // one scholarship vault per course, any new scholarships are simply added to it
         uint256 scholarshipYield; // the yield, in yTokens, earned by the course creator from scholarships
     }
@@ -154,7 +154,7 @@ contract DeSchool {
     );
     event ScholarshipsReopened (
         uint256 indexed courseId,
-        uint256 scolars
+        uint256 scholars
     );
     event ScholarshipWithdrawn(
         uint256 scholarshipId,
@@ -224,9 +224,9 @@ contract DeSchool {
             _stake,
             _duration,
             block.number,
-            0,
             _url,
             _creator,
+            0,
             address(0),
             0
         );
@@ -318,37 +318,37 @@ contract DeSchool {
     }
 
     /**
-     * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars are deregistered from the course
+     * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars are deregistered from the course.
+     *                   The core concept here is that, with perpetual scholarships, we need not assess outcomes or merit, because we are
+     *                   not consuming the money, just leveraging its presence in a shared vault to enable perpetual, collective learning. 
+     *                   Once deregistered, scholars can take the course again if they so choose.
      * @param  _courseId course id to be checked for possible new scholarship slots.
-     * @return scholars  the number of scholarship slots which have been reopened once currentScholars have completed the course, where completed is
-     *                   defined not in terms of assessment or merit, just in number of blocks passed. The core concept here is that, with perpetual
-     *                   scholarships, we need not assess outcomes or merit, because we are not consuming the money, just leveraging its presence in
-     *                   a shared vault to enable perpetual, collective learning. Once deregistered, scholars can take the course again if they so choose.
      */
     function perpetualScholars(uint256 _courseId) 
-        external 
-        returns (uint256 scholars) 
+        external
     {
         Course memory course = courses[_courseId];
+        require(
+            block.number >= course.checkpoint + course.duration,
+            "perpetualScholars: only call this once every course duration to save gas"
+        );
         uint256 currentScholars = course.scholars; 
-        uint256 checkedBlock = block.number - course.duration;
 
-        for (uint256 i; i < course.scholars; i++) {
-            for (uint256 j = course.checkpoint; j < checkedBlock; j++) {              
-                if (scholarData[_courseId][j].scholar != address(0)) {
-                    scholarData[_courseId][j].registered = false;
-                    course.scholars ++;
-                }
+        // we deregister scholars whose blockRegistered is after the checkpoint _and_ a whole course duration
+        for (uint256 i = course.checkpoint; i < course.checkpoint + course.duration; i++) {
+            if (scholarData[_courseId][i].scholar != address(0)) {
+                scholarData[_courseId][i].registered = false;
+                course.scholars += 1;
             }
         }
+
         // set the last checked block so the above loop doesn't get impossible
-        course.checkpoint = checkedBlock;
+        course.checkpoint += course.duration;
         uint newScholars = course.scholars - currentScholars;
         emit ScholarshipsReopened(
             _courseId,
             newScholars
         );
-        return newScholars;
     }
 
     /**
@@ -622,6 +622,10 @@ contract DeSchool {
     function withdrawYieldRewards(uint256 _courseId) 
         external 
     {
+        require(
+            msg.sender == courses[_courseId].creator,
+            "withdrawYieldRewards: only course creator can withdraw yield"
+        );
         uint256 withdrawableReward;
         // if there is yield from scholarships, withdraw it all
         if (courses[_courseId].scholarshipYield != 0) {

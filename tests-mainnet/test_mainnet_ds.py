@@ -23,7 +23,7 @@ def test_create_scholarships(contracts_with_scholarships, token, deployer):
     # fetch the first course
     course = deschool.courses(0)
     # check the "scholars" field in the course struct and ensure it reflects the number of scholars added by both scholarships
-    assert course[3] == (constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE) * 2
+    assert course[5] == (constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE) * 2
 
 
 def test_scholarship_reverts(contracts_with_scholarships, token, deployer, provider):
@@ -81,6 +81,36 @@ def test_register_scholar_reverts(contracts_with_scholarships, learners):
             0,
             {"from": learners[2]}
         )
+
+
+def test_perpetual_scholarships(contracts_with_scholarships, learners, provider):
+    deschool, learning_curve = contracts_with_scholarships
+    print(deschool.courses(0)[5])
+    tx = deschool.registerScholar(
+        0,
+        {"from": learners[0]}
+    )
+    print(deschool.courses(0)[5])
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
+    # this should fail, as the block.number should still be less that the course checkpoint + duration
+    with brownie.reverts("perpetualScholars: only call this once every course duration to save gas"):
+        tx = deschool.perpetualScholars(
+            0,
+            {"from": provider}
+        )
+    course = deschool.courses(0)
+    # our contracts_with_scholarships creates 2 scholarships for each course, hence this should still equal 1 at this stage
+    assert course[5] == 1
+    brownie.chain.mine(constants_mainnet.DURATION)
+    tx = deschool.perpetualScholars(
+        0,
+        {"from": provider}
+    )
+    assert "ScholarshipsReopened" in tx.events
+    assert tx.events["ScholarshipsReopened"]["scholars"] == 1
+    courseLater = deschool.courses(0)
+    assert courseLater[5] == 2
+
 
 def test_register_permit(contracts_with_courses, learners, token, deployer):
     deschool, learning_curve = contracts_with_courses
