@@ -129,6 +129,8 @@ def test_perpetual_scholarships_many_scholars(course_with_many_scholars, scholar
     )
     assert "PerpetualScholarships" in tx.events
     assert tx.events["PerpetualScholarships"]["newScholars"] == 10
+    # 11 scholars registered initially, 10 newScholars perpetuated, means 1 current scholar left.
+    assert deschool.courses(0)[5] == 1
     # once you have registered for a scholarship, you cannot re-register with that same account. This is not really ideological,
     # it's because we have to save as much gas as we can in the perpetualScholarships() loop. Just use another account ;)
     with brownie.reverts("registerScholar: already registered"):
