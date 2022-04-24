@@ -159,9 +159,9 @@ contract DeSchool {
         uint256 newScholars
     );
     event ScholarshipWithdrawn(
-        uint256 scholarshipId,
-        uint256 scholarshipAmount,
-        uint256 numScholars
+        uint256 indexed courseId,
+        uint256 amountWithdrawn,
+        uint256 scholarsRemoved
     );
     event LearnerRegistered(
         uint256 indexed courseId, 
@@ -298,32 +298,6 @@ contract DeSchool {
     }
 
     /**
-     * @notice deposit the current batch of DAI in the contract to yearn.
-     *         the batching mechanism is used to reduce gas for each learner,
-     *         so at any point someone can call this function and deploy all
-     *         funds in a specific "batch" to yearn, allowing the funds to gain
-     *         interest.
-     */
-    function batchDeposit() 
-        external 
-    {
-        uint256 batchId_ = batchIdTracker.current();
-        // initiate the next batch
-        uint256 batchAmount_ = batchTotal[batchId_];
-        batchIdTracker.increment();
-        require(batchAmount_ > 0, "batchDeposit: no funds to deposit");
-        // get the address of the vault from the yRegistry
-        I_Vault vault = I_Vault(registry.latestVault(address(stable)));
-        // approve the vault
-        stable.approve(address(vault), batchAmount_);
-        // mint y from the vault
-        uint256 yTokens = vault.deposit(batchAmount_);
-        batchYieldTotal[batchId_] = yTokens;
-        batchYieldAddress[batchId_] = address(vault);
-        emit BatchDeposited(batchId_, batchAmount_, yTokens);
-    }
-
-    /**
      * @notice           called by anyone to ensure perpetual scholarships are possible as previous scholars are deregistered from the course.
      *                   The core concept here is that, with perpetual scholarships, we need not assess outcomes or merit, because we are
      *                   not consuming the money, just leveraging its presence in a shared vault to enable perpetual, collective learning.
@@ -415,22 +389,19 @@ contract DeSchool {
         public 
     {
         require(
-            providerData[_courseId][msg.sender].amount <= _amount,
+            providerData[_courseId][msg.sender].amount >= _amount,
             "withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"
         );
         Course storage course =  courses[_courseId];
         I_Vault vault = I_Vault(course.scholarshipVault);
-        uint256 scholarsRemoved = course.stake / _amount;
+        uint256 scholarsRemoved = _amount / course.stake;
 
         // first, mark down the amount provided
         providerData[_courseId][msg.sender].amount -= _amount;
+        // we only need to subtract from the total scholarship for this course, as that is what is used to
+        // check when registering new scholars.
+        course.scholarshipTotal -= _amount;
 
-        // check, as provider could withdraw full amount while scholars are still registered, potentially causing solidity weirdness.
-        if (scholarsRemoved > course.scholars) {
-            course.scholars = 0;
-        } else {
-            course.scholars -= scholarsRemoved;
-        }
         emit ScholarshipWithdrawn(
             _courseId,
             _amount,
@@ -439,6 +410,32 @@ contract DeSchool {
         // withdraw amount from scholarshipVault for this course and return to provider
         vault.withdraw(_amount);
         stable.safeTransfer(msg.sender, _amount);
+    }
+
+    /**
+     * @notice deposit the current batch of DAI in the contract to yearn.
+     *         the batching mechanism is used to reduce gas for each learner,
+     *         so at any point someone can call this function and deploy all
+     *         funds in a specific "batch" to yearn, allowing the funds to gain
+     *         interest.
+     */
+    function batchDeposit() 
+        external 
+    {
+        uint256 batchId_ = batchIdTracker.current();
+        // initiate the next batch
+        uint256 batchAmount_ = batchTotal[batchId_];
+        batchIdTracker.increment();
+        require(batchAmount_ > 0, "batchDeposit: no funds to deposit");
+        // get the address of the vault from the yRegistry
+        I_Vault vault = I_Vault(registry.latestVault(address(stable)));
+        // approve the vault
+        stable.approve(address(vault), batchAmount_);
+        // mint y from the vault
+        uint256 yTokens = vault.deposit(batchAmount_);
+        batchYieldTotal[batchId_] = yTokens;
+        batchYieldAddress[batchId_] = address(vault);
+        emit BatchDeposited(batchId_, batchAmount_, yTokens);
     }
 
     /**

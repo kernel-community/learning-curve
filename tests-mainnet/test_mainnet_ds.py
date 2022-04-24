@@ -140,6 +140,48 @@ def test_perpetual_scholarships_many_scholars(course_with_many_scholars, scholar
         )
 
 
+def test_withdraw_scholarships(contracts_with_scholarships, provider):
+    deschool, learning_curve = contracts_with_scholarships
+    tx = deschool.withdrawScholarship(
+        0,
+        constants_mainnet.SCHOLARSHIP_AMOUNT,
+        {"from": provider}
+    )
+    assert "ScholarshipWithdrawn" in tx.events
+    assert tx.events["ScholarshipWithdrawn"]["courseId"] == 0
+    assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT
+    assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
+    # we can check the scholarshipTotal slot in the course struct to be sure
+    assert deschool.courses(0)[6] == 0
+    # Now try and withdraw only half the amount initially provided for another course
+    tx = deschool.withdrawScholarship(
+        1,
+        constants_mainnet.SCHOLARSHIP_AMOUNT / 2,
+        {"from": provider}
+    )
+    assert "ScholarshipWithdrawn" in tx.events
+    assert tx.events["ScholarshipWithdrawn"]["courseId"] == 1
+    assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT / 2
+    assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == (constants_mainnet.SCHOLARSHIP_AMOUNT / 2) / constants_mainnet.STAKE
+    assert deschool.courses(1)[6] == tx.events["ScholarshipWithdrawn"]["amountWithdrawn"]
+
+
+def test_withdraw_scholarships_reverts(contracts_with_scholarships, provider, hackerman):
+    deschool, learning_curve = contracts_with_scholarships
+    with brownie.reverts("withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"):
+        deschool.withdrawScholarship(
+            0,
+            constants_mainnet.SCHOLARSHIP_AMOUNT * 2,
+            {"from": provider}
+        )
+    with brownie.reverts("withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"):
+        deschool.withdrawScholarship(
+            0,
+            constants_mainnet.SCHOLARSHIP_AMOUNT,
+            {"from": hackerman}
+        )
+
+
 def test_register_permit(contracts_with_courses, learners, token, deployer):
     deschool, learning_curve = contracts_with_courses
     signer = Account.create()
