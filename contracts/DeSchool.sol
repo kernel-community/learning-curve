@@ -340,7 +340,10 @@ contract DeSchool {
         // this is a decrementing loop because of the way we assign scholarshipIds in registerScholar()
         // TODO: add batch protection here for the case where there are > 100 scholars to loop through
         for (uint256 i = totalScholars; i >= course.scholarshipsAvailable; i--) {
-            if (scholarData[_courseId][i].blockRegistered + course.duration <= block.number) {
+            if (
+                scholarData[_courseId][i].blockRegistered != 0 &&
+                scholarData[_courseId][i].blockRegistered + course.duration <= block.number
+            ) {
                 course.scholarshipsAvailable++;
             }
         }

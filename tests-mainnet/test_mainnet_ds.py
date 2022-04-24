@@ -89,14 +89,14 @@ def test_perpetual_scholarships(contracts_with_scholarships, learners, provider)
         {"from": learners[0]}
     )
     assert deschool.courses(0)[5] == 1
-    # brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
-    # # this will pass, but not affect the scholarshipsAvailable, as it should not pass the if statement yet
-    # tx = deschool.perpetualScholars(
-    #     0,
-    #     {"from": provider}
-    # )
-    # # our contracts_with_scholarships creates 2 scholarships for each course, hence this should still equal 1 at this stage
-    # assert deschool.courses(0)[5] == 1
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
+    # this will pass, but not affect the scholarshipsAvailable, as it should not pass the if statement yet
+    tx = deschool.perpetualScholars(
+        0,
+        {"from": provider}
+    )
+    # our contracts_with_scholarships creates 2 scholarships for each course, hence this should still equal 1 at this stage
+    assert deschool.courses(0)[5] == 1
     tx = deschool.registerScholar(
         0,
         {"from": learners[1]}
