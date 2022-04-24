@@ -79,7 +79,7 @@ contract DeSchool {
         uint256 checkpoint; // a block number we use to enable perpetual scholarships
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
-        uint256 scholarshipsAvailable; // the total number of scholarships still available for this course
+        uint256 scholars; // keep track of how many scholars are registered so we can deregister them later
         uint256 scholarshipTotal; // the total amount of DAI provided for scholarships for this course
         address scholarshipVault; // one scholarship vault per course, any new scholarships are simply added to it
         uint256 scholarshipYield; // the yield, in yTokens, earned by the course creator from scholarships
@@ -144,7 +144,7 @@ contract DeSchool {
     event ScholarshipCreated(
         uint256 indexed courseId,
         uint256 scholarshipAmount,
-        uint256 scholarshipsAvailable,
+        uint256 newScholars,
         uint256 scholarshipTotal,
         address scholarshipProvider,
         address scholarshipVault,
@@ -156,7 +156,7 @@ contract DeSchool {
     );
     event PerpetualScholarships (
         uint256 indexed courseId,
-        uint256 scholarshipsAvailable
+        uint256 newScholars
     );
     event ScholarshipWithdrawn(
         uint256 scholarshipId,
@@ -231,7 +231,7 @@ contract DeSchool {
             block.number,
             _url,
             _creator,
-            0, // scholarshipAvailable are 0 when we create a course
+            0, // no scholars when a course is first created
             0, // scholarshipAmount is similarly 0.
             address(0), // scholarshipVault address unset at coures creation
             0 // scholarshipYield also 0
@@ -285,12 +285,11 @@ contract DeSchool {
 
         // add this scholarship provided to any pre-existing amount
         course.scholarshipTotal += _amount;
-        course.scholarshipsAvailable += _amount / course.stake;
 
         emit ScholarshipCreated(
             _courseId,
             _amount,
-            course.scholarshipsAvailable,
+            _amount / course.stake, // amount scholars this specific scholarship creates
             course.scholarshipTotal,
             msg.sender,
             course.scholarshipVault,
@@ -334,37 +333,40 @@ contract DeSchool {
         external
     {
         Course storage course = courses[_courseId];
+        uint256 currentScholars = course.scholars;
         uint256 totalScholars = course.scholarshipTotal / course.stake; 
 
         // For courses with large numbers of scholars, we have to deregister scholars in batches
-        // as loops in solidity are not cool for gast costs. We look for the latest scholar registered,
-        // using a decremeting loop because of the way we assign scholarshipIds in registerScholar(),
-        // and then make available all scholarships in the batches that pass the if statement. It's not
-        // 100% accurate: there could be completed scholars in a batch who last member is not completed,
-        // which therefore does not trigger the if statement, but solidity is all about these trade-offs.
-        if (totalScholars > 100) {
-            for (uint256 i = totalScholars; i >= course.scholarshipsAvailable; i -= (totalScholars / 10)) {
+        // as loops in solidity are not cool for gas costs. We begin the first loop after the first
+        // batch rather than 0 so as to avoid counting the first scholar as a whole batch. It's not 
+        // 100% accurate: there could be uncompleted scholars in a batch who first member is completed,
+        // which therefore triggers the if statement. We feel OK about optimistcally increasing scholarships
+        // for such cases.
+        if (totalScholars > 10) {
+            for (uint256 i = (totalScholars / 10); i <= currentScholars; i += (totalScholars / 10)) {
                 if (
                     scholarData[_courseId][i].blockRegistered != 0 &&
                     scholarData[_courseId][i].blockRegistered + course.duration <= block.number
                 ) {
-                    course.scholarshipsAvailable += totalScholars / 10;
+                    course.scholars -= (totalScholars / 10);
                 }
             }
         } else {
-            for (uint256 j = totalScholars; j >= course.scholarshipsAvailable; j--) {
+            for (uint256 j = 0; j <= currentScholars; j++) {
                 if (
                     scholarData[_courseId][j].blockRegistered != 0 &&
                     scholarData[_courseId][j].blockRegistered + course.duration <= block.number
                 ) {
-                    course.scholarshipsAvailable++;
+                    course.scholars --;
                 }
             }
         }
 
+        uint256 newScholars = currentScholars - course.scholars;
+
         emit PerpetualScholarships(
             _courseId,
-            course.scholarshipsAvailable
+            newScholars
         );
     }
 
@@ -381,7 +383,7 @@ contract DeSchool {
         );
         Course storage course = courses[_courseId];
         require(
-            course.scholarshipsAvailable > 0, 
+            (course.scholarshipTotal / course.stake) - course.scholars > 0, 
             "registerScholar: no scholarships available for this course"
         );
         if (currentScholar[_courseId][msg.sender].blockRegistered != 0) {
@@ -389,10 +391,10 @@ contract DeSchool {
         }
         currentScholar[_courseId][msg.sender].blockRegistered = block.number;
         // we assign a "scholarId" here to make the loop in perpetualScholars possible
-        scholarData[_courseId][course.scholarshipsAvailable].scholar = msg.sender;
+        scholarData[_courseId][course.scholars].scholar = msg.sender;
         // it seems silly, but we need this for perpetualScholarships()
-        scholarData[_courseId][course.scholarshipsAvailable].blockRegistered = block.number;
-        course.scholarshipsAvailable -= 1;
+        scholarData[_courseId][course.scholars].blockRegistered = block.number;
+        course.scholars++;
         
         emit ScholarRegistered(
             _courseId, 
@@ -422,10 +424,10 @@ contract DeSchool {
         providerData[_courseId][msg.sender].amount -= _amount;
 
         // check, as provider could withdraw full amount while scholars are still registered, potentially causing solidity weirdness.
-        if (scholarsRemoved > course.scholarshipsAvailable) {
-            course.scholarshipsAvailable = 0;
+        if (scholarsRemoved > course.scholars) {
+            course.scholars = 0;
         } else {
-            course.scholarshipsAvailable -= scholarsRemoved;
+            course.scholars -= scholarsRemoved;
         }
         emit ScholarshipWithdrawn(
             _courseId,
@@ -675,12 +677,12 @@ contract DeSchool {
         }
     }
 
-    function getAvailableScholarships(uint256 _courseId) 
+    function getScholars(uint256 _courseId) 
         external 
         view 
         returns (uint256) 
     {
-        return courses[_courseId].scholarshipsAvailable;
+        return courses[_courseId].scholars;
     }
 
     function getCurrentBatchTotal() 

@@ -64,16 +64,27 @@ def contracts_with_scholarships(contracts_with_courses, token, deployer, provide
             constants_mainnet.SCHOLARSHIP_AMOUNT,
             {"from": provider}
         )
-        assert "ScholarshipCreated" in tx.events
-        assert tx.events["ScholarshipCreated"]["courseId"] == n
-        assert tx.events["ScholarshipCreated"]["scholarshipAmount"] == constants_mainnet.SCHOLARSHIP_AMOUNT
-        assert tx.events["ScholarshipCreated"]["scholarshipsAvailable"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
-        assert tx.events["ScholarshipCreated"]["scholarshipTotal"] == constants_mainnet.SCHOLARSHIP_AMOUNT
-        assert tx.events["ScholarshipCreated"]["scholarshipProvider"] == provider
-        # This will only remain true until the registry updates the latestVault, in which case we need to update constants_mainnet
-        assert tx.events["ScholarshipCreated"]["scholarshipVault"] == constants_mainnet.VAULT
     yield deschool, learning_curve
 
+
+@pytest.fixture(scope="function")
+def course_with_many_scholars(contracts_with_courses, token, deployer, provider, scholars):
+    deschool, learning_curve = contracts_with_courses
+    token.transfer(provider, (constants_mainnet.SCHOLARSHIP_AMOUNT * 10), {"from": deployer})
+    token.approve(deschool, (constants_mainnet.SCHOLARSHIP_AMOUNT * 10), {"from": provider})
+    tx = deschool.createScholarships(
+            0,
+            constants_mainnet.SCHOLARSHIP_AMOUNT * 10,
+            {"from": provider}
+        )
+    for n, scholar in enumerate(scholars):
+        deschool.registerScholar(
+            0,
+            {"from": scholar}
+        )
+    # slot 5 is where "scholars" is stored in the course struct
+    assert deschool.courses(0)[5] == 11
+    yield deschool, learning_curve
 
 @pytest.fixture(scope="function")
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
@@ -102,8 +113,15 @@ def provider(accounts):
 
 @pytest.fixture
 def hackerman(accounts):
-    yield accounts[9]
+    yield accounts[8]
 
+
+@pytest.fixture
+def scholars(accounts):
+    for i in range(11):
+        accounts.add()
+    yield accounts[9:20]
+    
 
 @pytest.fixture
 def token():

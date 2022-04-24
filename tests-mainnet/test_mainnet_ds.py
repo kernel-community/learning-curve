@@ -17,11 +17,9 @@ def test_create_scholarships(contracts_with_scholarships, token, deployer):
     )
     assert "ScholarshipCreated" in tx.events
     assert tx.events["ScholarshipCreated"]["courseId"] == 0
-    assert tx.events["ScholarshipCreated"]["scholarshipsAvailable"] == (constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE) * 2
+    assert tx.events["ScholarshipCreated"]["newScholars"] == (constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE)
     assert tx.events["ScholarshipCreated"]["scholarshipTotal"] == (constants_mainnet.SCHOLARSHIP_AMOUNT * 2)
     assert tx.events["ScholarshipCreated"]["scholarshipProvider"] == deployer
-    # double check the "scholarshipsAvailable" field in the course struct and ensure it reflects the number of scholars added by both scholarships
-    assert deschool.courses(0)[5] == tx.events["ScholarshipCreated"]["scholarshipsAvailable"]
 
 
 def test_scholarship_reverts(contracts_with_scholarships, token, deployer, provider):
@@ -83,14 +81,14 @@ def test_register_scholar_reverts(contracts_with_scholarships, learners):
 
 def test_perpetual_scholarships(contracts_with_scholarships, learners, provider):
     deschool, learning_curve = contracts_with_scholarships
-    assert deschool.courses(0)[5] == 2
+    assert deschool.courses(0)[5] == 0
     tx = deschool.registerScholar(
         0,
         {"from": learners[0]}
     )
     assert deschool.courses(0)[5] == 1
     brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
-    # this will pass, but not affect the scholarshipsAvailable, as it should not pass the if statement yet
+    # this will pass, but not affect the scholarshipsAvailable, as it should not pass the second if statement yet
     tx = deschool.perpetualScholars(
         0,
         {"from": provider}
@@ -101,15 +99,15 @@ def test_perpetual_scholarships(contracts_with_scholarships, learners, provider)
         0,
         {"from": learners[1]}
     )
-    assert deschool.courses(0)[5] == 0
+    assert deschool.courses(0)[5] == 2
     brownie.chain.mine(constants_mainnet.DURATION)
     tx = deschool.perpetualScholars(
         0,
         {"from": provider}
     )
     assert "PerpetualScholarships" in tx.events
-    assert tx.events["PerpetualScholarships"]["scholarshipsAvailable"] == 2
-    assert deschool.courses(0)[5] == 2
+    assert tx.events["PerpetualScholarships"]["newScholars"] == 2
+    assert deschool.courses(0)[5] == 0
     # should be able to register now that scholarships have been perpetuated
     tx = deschool.registerScholar(
         0,
@@ -118,6 +116,26 @@ def test_perpetual_scholarships(contracts_with_scholarships, learners, provider)
     assert "ScholarRegistered" in tx.events
     assert tx.events["ScholarRegistered"]["courseId"] == 0
     assert tx.events["ScholarRegistered"]["scholar"] == learners[2]
+
+
+def test_perpetual_scholarships_many_scholars(course_with_many_scholars, scholars, provider):
+    deschool, learning_curve = course_with_many_scholars
+    # it seems like scholars don't all quite register at the same time in brownie, so if we mine the double course duration, 
+    # they should all be deregistered using the batch functionality in the first if statement
+    brownie.chain.mine(constants_mainnet.DURATION * 2)
+    tx = deschool.perpetualScholars(
+        0,
+        {"from": provider}
+    )
+    assert "PerpetualScholarships" in tx.events
+    assert tx.events["PerpetualScholarships"]["newScholars"] == 10
+    # once you have registered for a scholarship, you cannot re-register with that same account. This is not really ideological,
+    # it's because we have to save as much gas as we can in the perpetualScholars loop. Just use another account ;)
+    with brownie.reverts("registerScholar: already registered"):
+        tx = deschool.registerScholar(
+            0,
+            {"from": scholars[0]}
+        )
 
 
 def test_register_permit(contracts_with_courses, learners, token, deployer):
