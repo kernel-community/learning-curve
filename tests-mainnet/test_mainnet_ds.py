@@ -81,12 +81,12 @@ def test_register_scholar_reverts(contracts_with_scholarships, learners):
 
 def test_perpetual_scholarships(contracts_with_scholarships, learners, provider):
     deschool, learning_curve = contracts_with_scholarships
-    assert deschool.courses(0)[5] == 0
+    assert deschool.courses(0)[4] == 0
     tx = deschool.registerScholar(
         0,
         {"from": learners[0]}
     )
-    assert deschool.courses(0)[5] == 1
+    assert deschool.courses(0)[4] == 1
     brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
     # this will pass, but not affect the scholarshipsAvailable, as it should not pass the second if statement yet
     tx = deschool.perpetualScholars(
@@ -94,12 +94,12 @@ def test_perpetual_scholarships(contracts_with_scholarships, learners, provider)
         {"from": provider}
     )
     # our contracts_with_scholarships creates 2 scholarships for each course, hence this should still equal 1 at this stage
-    assert deschool.courses(0)[5] == 1
+    assert deschool.courses(0)[4] == 1
     tx = deschool.registerScholar(
         0,
         {"from": learners[1]}
     )
-    assert deschool.courses(0)[5] == 2
+    assert deschool.courses(0)[4] == 2
     brownie.chain.mine(constants_mainnet.DURATION)
     tx = deschool.perpetualScholars(
         0,
@@ -107,7 +107,7 @@ def test_perpetual_scholarships(contracts_with_scholarships, learners, provider)
     )
     assert "PerpetualScholarships" in tx.events
     assert tx.events["PerpetualScholarships"]["newScholars"] == 2
-    assert deschool.courses(0)[5] == 0
+    assert deschool.courses(0)[4] == 0
     # should be able to register now that scholarships have been perpetuated
     tx = deschool.registerScholar(
         0,
@@ -130,7 +130,7 @@ def test_perpetual_scholarships_many_scholars(course_with_many_scholars, scholar
     assert "PerpetualScholarships" in tx.events
     assert tx.events["PerpetualScholarships"]["newScholars"] == 10
     # 11 scholars registered initially, 10 newScholars perpetuated, means 1 current scholar left.
-    assert deschool.courses(0)[5] == 1
+    assert deschool.courses(0)[4] == 1
     # once you have registered for a scholarship, you cannot re-register with that same account. This is not really ideological,
     # it's because we have to save as much gas as we can in the perpetualScholarships() loop. Just use another account ;)
     with brownie.reverts("registerScholar: already registered"):
@@ -152,7 +152,7 @@ def test_withdraw_scholarships(contracts_with_scholarships, provider):
     assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT
     assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
     # we can check the scholarshipTotal slot in the course struct to be sure
-    assert deschool.courses(0)[6] == 0
+    assert deschool.courses(0)[5] == 0
     # Now try and withdraw only half the amount initially provided for another course
     tx = deschool.withdrawScholarship(
         1,
@@ -163,7 +163,7 @@ def test_withdraw_scholarships(contracts_with_scholarships, provider):
     assert tx.events["ScholarshipWithdrawn"]["courseId"] == 1
     assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT / 2
     assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == (constants_mainnet.SCHOLARSHIP_AMOUNT / 2) / constants_mainnet.STAKE
-    assert deschool.courses(1)[6] == tx.events["ScholarshipWithdrawn"]["amountWithdrawn"]
+    assert deschool.courses(1)[5] == tx.events["ScholarshipWithdrawn"]["amountWithdrawn"]
 
 
 def test_withdraw_scholarships_reverts(contracts_with_scholarships, provider, hackerman):

@@ -83,7 +83,7 @@ def course_with_many_scholars(contracts_with_courses, token, deployer, provider,
             {"from": scholar}
         )
     # slot 5 is where "scholars" is stored in the course struct
-    assert deschool.courses(0)[5] == 11
+    assert deschool.courses(0)[4] == 11
     yield deschool, learning_curve
 
 @pytest.fixture(scope="function")

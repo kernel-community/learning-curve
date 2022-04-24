@@ -76,7 +76,6 @@ contract DeSchool {
     struct Course {
         uint256 stake; // an amount in DAI to be staked for the duration course
         uint256 duration; // the duration of the course, in number of blocks
-        uint256 checkpoint; // a block number we use to enable perpetual scholarships
         string url; // url containing course data
         address creator; // address to receive any yield from a redeem call
         uint256 scholars; // keep track of how many scholars are registered so we can deregister them later
@@ -137,7 +136,6 @@ contract DeSchool {
         uint256 indexed courseId,
         uint256 stake,
         uint256 duration,
-        uint256 checkpoint,
         string url,
         address creator
     );
@@ -228,7 +226,6 @@ contract DeSchool {
         courses[courseId_] = Course(
             _stake,
             _duration,
-            block.number,
             _url,
             _creator,
             0, // no scholars when a course is first created
@@ -240,7 +237,6 @@ contract DeSchool {
             courseId_,
             _stake,
             _duration,
-            block.number,
             _url,
             _creator
         );
