@@ -67,7 +67,8 @@ def contracts_with_scholarships(contracts_with_courses, token, deployer, provide
         assert "ScholarshipCreated" in tx.events
         assert tx.events["ScholarshipCreated"]["courseId"] == n
         assert tx.events["ScholarshipCreated"]["scholarshipAmount"] == constants_mainnet.SCHOLARSHIP_AMOUNT
-        assert tx.events["ScholarshipCreated"]["numScholars"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
+        assert tx.events["ScholarshipCreated"]["scholarshipsAvailable"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
+        assert tx.events["ScholarshipCreated"]["scholarshipTotal"] == constants_mainnet.SCHOLARSHIP_AMOUNT
         assert tx.events["ScholarshipCreated"]["scholarshipProvider"] == provider
         # This will only remain true until the registry updates the latestVault, in which case we need to update constants_mainnet
         assert tx.events["ScholarshipCreated"]["scholarshipVault"] == constants_mainnet.VAULT
