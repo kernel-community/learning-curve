@@ -337,9 +337,11 @@ contract DeSchool {
         uint256 totalScholars = course.scholarshipTotal / course.stake; 
 
         // For courses with large numbers of scholars, we have to deregister scholars in batches
-        // as loops in solidity are not cool for gas costs. We begin the first loop after the first
-        // batch rather than 0 so as to avoid counting the first scholar as a whole batch. It's not 
-        // 100% accurate: there could be uncompleted scholars in a batch who first member is completed,
+        // as loops in solidity are not cool for gas costs.
+        // 
+        // We begin after the first batch rather than 0 so as to avoid counting the first scholar as a whole batch.
+        //  
+        // It's not 100% accurate: there could be uncompleted scholars in a batch who first member is completed,
         // which therefore triggers the if statement. We feel OK about optimistcally increasing scholarships
         // for such cases.
         if (totalScholars > 10) {

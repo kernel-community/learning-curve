@@ -120,7 +120,7 @@ def test_perpetual_scholarships(contracts_with_scholarships, learners, provider)
 
 def test_perpetual_scholarships_many_scholars(course_with_many_scholars, scholars, provider):
     deschool, learning_curve = course_with_many_scholars
-    # it seems like scholars don't all quite register at the same time in brownie, so if we mine the double course duration, 
+    # sometimes scholars don't all quite register at the same time in brownie, so if we mine double the course duration, 
     # they should all be deregistered using the batch functionality in the first if statement
     brownie.chain.mine(constants_mainnet.DURATION * 2)
     tx = deschool.perpetualScholars(
@@ -130,7 +130,7 @@ def test_perpetual_scholarships_many_scholars(course_with_many_scholars, scholar
     assert "PerpetualScholarships" in tx.events
     assert tx.events["PerpetualScholarships"]["newScholars"] == 10
     # once you have registered for a scholarship, you cannot re-register with that same account. This is not really ideological,
-    # it's because we have to save as much gas as we can in the perpetualScholars loop. Just use another account ;)
+    # it's because we have to save as much gas as we can in the perpetualScholarships() loop. Just use another account ;)
     with brownie.reverts("registerScholar: already registered"):
         tx = deschool.registerScholar(
             0,
