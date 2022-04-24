@@ -335,16 +335,30 @@ contract DeSchool {
     {
         Course storage course = courses[_courseId];
         uint256 totalScholars = course.scholarshipTotal / course.stake; 
-        
-        // we deregister scholars after the course duration, in number of blocks, has passed since they registered
-        // this is a decrementing loop because of the way we assign scholarshipIds in registerScholar()
-        // TODO: add batch protection here for the case where there are > 100 scholars to loop through
-        for (uint256 i = totalScholars; i >= course.scholarshipsAvailable; i--) {
-            if (
-                scholarData[_courseId][i].blockRegistered != 0 &&
-                scholarData[_courseId][i].blockRegistered + course.duration <= block.number
-            ) {
-                course.scholarshipsAvailable++;
+
+        // For courses with large numbers of scholars, we have to deregister scholars in batches
+        // as loops in solidity are not cool for gast costs. We look for the latest scholar registered,
+        // using a decremeting loop because of the way we assign scholarshipIds in registerScholar(),
+        // and then make available all scholarships in the batches that pass the if statement. It's not
+        // 100% accurate: there could be completed scholars in a batch who last member is not completed,
+        // which therefore does not trigger the if statement, but solidity is all about these trade-offs.
+        if (totalScholars > 100) {
+            for (uint256 i = totalScholars; i >= course.scholarshipsAvailable; i -= (totalScholars / 10)) {
+                if (
+                    scholarData[_courseId][i].blockRegistered != 0 &&
+                    scholarData[_courseId][i].blockRegistered + course.duration <= block.number
+                ) {
+                    course.scholarshipsAvailable += totalScholars / 10;
+                }
+            }
+        } else {
+            for (uint256 j = totalScholars; j >= course.scholarshipsAvailable; j--) {
+                if (
+                    scholarData[_courseId][j].blockRegistered != 0 &&
+                    scholarData[_courseId][j].blockRegistered + course.duration <= block.number
+                ) {
+                    course.scholarshipsAvailable++;
+                }
             }
         }
 
