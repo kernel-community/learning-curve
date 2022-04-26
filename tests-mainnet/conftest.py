@@ -129,18 +129,18 @@ def token():
 
 
 @pytest.fixture
-def ydai():
+def ytoken():
     yield Contract.from_explorer(constants_mainnet.VAULT)
 
 
 @pytest.fixture
 def gen_lev_strat():
-    yield Contract.from_explorer("0x1676055fE954EE6fc388F9096210E5EbE0A9070c")
+    yield Contract.from_explorer(constants_mainnet.GEN_LEV)
 
 
 @pytest.fixture
 def keeper():
-    yield accounts.at("0x736d7e3c5a6cb2ce3b764300140abf476f6cfccf", force=True)
+    yield accounts.at(constants_mainnet.KEEPER, force=True)
 
 
 @pytest.fixture
