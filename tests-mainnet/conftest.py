@@ -66,26 +66,6 @@ def contracts_with_scholarships(contracts_with_courses, token, deployer, provide
         )
     yield deschool, learning_curve
 
-
-@pytest.fixture(scope="function")
-def course_with_many_scholars(contracts_with_courses, token, deployer, provider, scholars):
-    deschool, learning_curve = contracts_with_courses
-    token.transfer(provider, (constants_mainnet.SCHOLARSHIP_AMOUNT * 10), {"from": deployer})
-    token.approve(deschool, (constants_mainnet.SCHOLARSHIP_AMOUNT * 10), {"from": provider})
-    tx = deschool.createScholarships(
-            0,
-            constants_mainnet.SCHOLARSHIP_AMOUNT * 10,
-            {"from": provider}
-        )
-    for n, scholar in enumerate(scholars):
-        deschool.registerScholar(
-            0,
-            {"from": scholar}
-        )
-    # slot 5 is where "scholars" is stored in the course struct
-    assert deschool.courses(0)[4] == 11
-    yield deschool, learning_curve
-
 @pytest.fixture(scope="function")
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
     deschool, learning_curve = contracts_with_courses
@@ -114,14 +94,7 @@ def provider(accounts):
 @pytest.fixture
 def hackerman(accounts):
     yield accounts[8]
-
-
-@pytest.fixture
-def scholars(accounts):
-    for i in range(11):
-        accounts.add()
-    yield accounts[9:20]
-    
+  
 
 @pytest.fixture
 def token():
