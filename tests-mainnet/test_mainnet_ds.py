@@ -91,8 +91,9 @@ def test_register_scholar_reverts(contracts_with_scholarships, learners):
         )
 
 
-def test_withdraw_scholarships(contracts_with_scholarships, provider):
+def test_withdraw_scholarships(contracts_with_scholarships, token, provider):
     deschool, learning_curve = contracts_with_scholarships
+    prov_bal_before = token.balanceOf(provider)
     tx = deschool.withdrawScholarship(
         0,
         constants_mainnet.SCHOLARSHIP_AMOUNT,
@@ -102,6 +103,7 @@ def test_withdraw_scholarships(contracts_with_scholarships, provider):
     assert tx.events["ScholarshipWithdrawn"]["courseId"] == 0
     assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT
     assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
+    assert token.balanceOf(provider) == prov_bal_before + constants_mainnet.SCHOLARSHIP_AMOUNT
     # we can check the scholarshipTotal slot in the course struct to be sure
     assert deschool.courses(0)[5] == 0
     # Now try and withdraw only half the amount initially provided for another course
@@ -115,6 +117,7 @@ def test_withdraw_scholarships(contracts_with_scholarships, provider):
     assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT / 2
     assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == (constants_mainnet.SCHOLARSHIP_AMOUNT / 2) / constants_mainnet.STAKE
     assert deschool.courses(1)[6] == tx.events["ScholarshipWithdrawn"]["amountWithdrawn"]
+    assert token.balanceOf(provider) == prov_bal_before + constants_mainnet.SCHOLARSHIP_AMOUNT + constants_mainnet.SCHOLARSHIP_AMOUNT / 2
 
 
 def test_withdraw_scholarships_reverts(contracts_with_scholarships, provider, hackerman):
