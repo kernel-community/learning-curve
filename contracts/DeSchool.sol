@@ -1,68 +1,14 @@
 //SPDX-License-Identifier: MPL-2.0
 pragma solidity 0.8.13;
 
+import "./interfaces/I_Vault.sol";
+import "./interfaces/I_Registry.sol";
+import "./interfaces/IERC20Permit.sol";
+import "./interfaces/I_LearningCurve.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-interface I_Vault {
-    function token() external view returns (address);
-
-    function underlying() external view returns (address);
-
-    function pricePerShare() external view returns (uint256);
-
-    function deposit(uint256) external returns (uint256);
-
-    function depositAll() external;
-
-    function withdraw(uint256) external returns (uint256);
-
-    function withdraw() external returns (uint256);
-
-    function balanceOf(address) external returns (uint256);
-}
-
-interface I_LearningCurve {
-    function mintForAddress(address, uint256) external;
-
-    function balanceOf(address) external view returns (uint256);
-}
-
-interface I_Registry {
-    function latestVault(address) external view returns (address);
-}
-
-interface IERC20Permit {
-
-    function permit(
-        address holder,
-        address spender,
-        uint256 nonce,
-        uint256 expiry,
-        bool allowed,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-
-    //EIP2612 implementation
-    function permit(
-        address holder,
-        address spender,
-        uint256 amount,
-        uint256 expiry,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-
-    function nonces(address holder) external view returns(uint);
-
-    function pull(address usr, uint256 wad) external;
-
-    function approve(address usr, uint256 wad) external returns (bool);
-}
 /**
  * @title DeSchool
  * @author kjr217, cryptowanderer
@@ -127,7 +73,7 @@ contract DeSchool {
 
     // the stablecoin used by the contract, DAI
     IERC20 public stable;
-    // the yearn resgistry used by the contract, to determine what the yDai address is.
+    // the yearn registry used by the contract, to determine what the yDai address is.
     I_Registry public registry;
     // interface for the learning curve
     I_LearningCurve public learningCurve;
