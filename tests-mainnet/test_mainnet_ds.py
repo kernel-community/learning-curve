@@ -133,6 +133,7 @@ def build_permit(holder, spender, token, expiry):
     assert encode_hex(hash_domain(data)) == token.DOMAIN_SEPARATOR()
     return encode_structured_data(data)
 
+
 def test_create_scholarships(contracts_with_scholarships, token, deployer):
     deschool, learning_curve = contracts_with_scholarships
     # provide another scholarship, from a separate account, to the first course
@@ -166,6 +167,23 @@ def test_scholarship_reverts(contracts_with_scholarships, token, deployer, provi
             constants_mainnet.SCHOLARSHIP_AMOUNT,
             {"from": provider}
         )
+
+
+def test_permit_create_scholarships(contracts_with_courses, learners, token, deployer):
+    deschool, learning_curve = contracts_with_courses
+    signer = Account.create()
+    holder = signer.address
+    token.transfer(holder, constants_mainnet.SCHOLARSHIP_AMOUNT, {"from": deployer})
+    assert token.balanceOf(holder) == constants_mainnet.SCHOLARSHIP_AMOUNT
+    permit = build_permit(holder, str(deschool), token, 3600)
+    signed = signer.sign_message(permit)
+    print(token.balanceOf(deschool.address))
+    tx = deschool.permitCreateScholarships(0, constants_mainnet.SCHOLARSHIP_AMOUNT, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
+    print(token.balanceOf(deschool.address))
+    assert "ScholarshipCreated" in tx.events
+    assert tx.events["ScholarshipCreated"]["courseId"] == 0
+    assert tx.events["ScholarshipCreated"]["scholarshipAmount"] == constants_mainnet.SCHOLARSHIP_AMOUNT
+
 
 def test_register_scholar(contracts_with_scholarships, learners):
     deschool, learning_curve = contracts_with_scholarships
@@ -229,8 +247,8 @@ def test_withdraw_scholarships(contracts_with_scholarships, token, provider):
     assert "ScholarshipWithdrawn" in tx.events
     assert tx.events["ScholarshipWithdrawn"]["courseId"] == 0
     assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT
-    assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == constants_mainnet.SCHOLARSHIP_AMOUNT / constants_mainnet.STAKE
-    assert token.balanceOf(provider) == prov_bal_before + constants_mainnet.SCHOLARSHIP_AMOUNT
+    # the -1 is because of a rounding error in the mul div operation we do to ensure we cater for the case that the vault makes a loss
+    assert token.balanceOf(provider) == prov_bal_before + constants_mainnet.SCHOLARSHIP_AMOUNT - 1
     # we can check the scholarshipTotal slot in the course struct to be sure
     assert deschool.courses(0)[5] == 0
     # Now try and withdraw only half the amount initially provided for another course
@@ -242,9 +260,9 @@ def test_withdraw_scholarships(contracts_with_scholarships, token, provider):
     assert "ScholarshipWithdrawn" in tx.events
     assert tx.events["ScholarshipWithdrawn"]["courseId"] == 1
     assert tx.events["ScholarshipWithdrawn"]["amountWithdrawn"] == constants_mainnet.SCHOLARSHIP_AMOUNT / 2
-    assert tx.events["ScholarshipWithdrawn"]["scholarsRemoved"] == (constants_mainnet.SCHOLARSHIP_AMOUNT / 2) / constants_mainnet.STAKE
     assert deschool.courses(1)[6] == tx.events["ScholarshipWithdrawn"]["amountWithdrawn"]
-    assert token.balanceOf(provider) == prov_bal_before + constants_mainnet.SCHOLARSHIP_AMOUNT + constants_mainnet.SCHOLARSHIP_AMOUNT / 2
+    # this rounding error depends on the amount and it's relation to the total, it seems
+    assert token.balanceOf(provider) == prov_bal_before + constants_mainnet.SCHOLARSHIP_AMOUNT + constants_mainnet.SCHOLARSHIP_AMOUNT / 2 - 2
 
 
 def test_withdraw_scholarships_reverts(contracts_with_scholarships, provider, hackerman):

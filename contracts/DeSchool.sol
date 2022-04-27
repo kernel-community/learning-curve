@@ -315,6 +315,9 @@ contract DeSchool {
         );
         Course storage course =  courses[_courseId];
         I_Vault vault = I_Vault(course.scholarshipVault);
+        // check to make sure the vault has not made a loss
+        uint256 temp = (_amount * 1e18) / providerData[_courseId][msg.sender].amount;
+        uint256 providerShares = (temp * course.scholarshipYield) / 1e18;
 
         // first, mark down the amount provided
         providerData[_courseId][msg.sender].amount -= _amount;
@@ -327,8 +330,6 @@ contract DeSchool {
             _amount
         );
         // withdraw amount from scholarshipVault for this course and return to provider
-        uint256 temp = (_amount * 1e18) / providerData[_courseId][msg.sender].amount;
-        uint256 providerShares = (temp * course.scholarshipYield) / 1e18;
         uint256 shares = vault.withdraw(providerShares);
         vault.withdraw(shares);
         stable.safeTransfer(msg.sender, shares);
