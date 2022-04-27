@@ -104,8 +104,7 @@ contract DeSchool {
     );
     event ScholarshipWithdrawn(
         uint256 indexed courseId,
-        uint256 amountWithdrawn,
-        uint256 scholarsRemoved
+        uint256 amountWithdrawn
     );
     event LearnerRegistered(
         uint256 indexed courseId, 
@@ -196,10 +195,10 @@ contract DeSchool {
      * @param  _amount   the amount in DAI that the donor wishes to give
      */
     function createScholarships(uint256 _courseId, uint256 _amount) 
-        external 
+        public 
     {
         require(
-            _amount >= 1 * 1e21, 
+            _amount >= courses[_courseId].stake, 
             "createScholarships: must seed scholarship with enough funds to justify gas costs"
         );
         require(
@@ -207,7 +206,7 @@ contract DeSchool {
             "createScholarships: courseId does not exist"
         );
         Course storage course = courses[_courseId];
-        // TODO: can we transfer the amount directly into the relevant vault via permit() in order to save gas fees?
+        
         stable.safeTransferFrom(msg.sender, address(this), _amount);
 
         // get the address of the scholarshipVault if it exists, otherwise get the latest vault from the yRegistry
@@ -219,12 +218,11 @@ contract DeSchool {
             I_Vault newVault = I_Vault(registry.latestVault(address(stable)));
             course.scholarshipVault = address(newVault);
             stable.approve(course.scholarshipVault, _amount);
-            uint256 yTokens = newVault.deposit(_amount);
-            course.scholarshipYield = yTokens;
+            course.scholarshipYield = newVault.deposit(_amount);
         }
 
         // set providerData to ensure withdrawals are possible
-        providerData[_courseId][msg.sender].amount = _amount;
+        providerData[_courseId][msg.sender].amount += _amount;
 
         // add this scholarship provided to any pre-existing amount
         course.scholarshipTotal += _amount;
@@ -238,6 +236,30 @@ contract DeSchool {
             course.scholarshipVault,
             course.scholarshipYield
         );
+    }
+
+        /**
+     * @notice          handles learner registration with permit. This enable learners to register with only one transaction,
+     *                  rather than two, i.e. approve DeSchool to spend your DAI, and only then register. This saves gas for
+     *                  learners and improves the UX.
+     * @param _courseId course id for which the learner wishes to register
+     * @param nonce     provided in the 2616 standard for replay protection.
+     * @param expiry    the current blocktime must be less than or equal to this for a valid transaction
+     * @param v         a recovery identity variable included in Ethereum, in addition to the r and s below which are standard ECDSA parameters
+     * @param r         standard ECDSA parameter
+     * @param s         standard ECDSA parameter
+     */
+    function permitCreateScholarships(
+        uint256 _courseId, 
+        uint256 _amount,
+        uint256 nonce, 
+        uint256 expiry, 
+        uint8 v, 
+        bytes32 r, 
+        bytes32 s
+    ) external {
+        IERC20Permit(address(stable)).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
+        createScholarships(_courseId, _amount);
     }
 
     /**
@@ -293,7 +315,6 @@ contract DeSchool {
         );
         Course storage course =  courses[_courseId];
         I_Vault vault = I_Vault(course.scholarshipVault);
-        uint256 scholarsRemoved = _amount / course.stake;
 
         // first, mark down the amount provided
         providerData[_courseId][msg.sender].amount -= _amount;
@@ -303,12 +324,14 @@ contract DeSchool {
 
         emit ScholarshipWithdrawn(
             _courseId,
-            _amount,
-            scholarsRemoved
+            _amount
         );
         // withdraw amount from scholarshipVault for this course and return to provider
-        vault.withdraw(_amount);
-        stable.safeTransfer(msg.sender, _amount);
+        uint256 temp = (_amount * 1e18) / providerData[_courseId][msg.sender].amount;
+        uint256 providerShares = (temp * course.scholarshipYield) / 1e18;
+        uint256 shares = vault.withdraw(providerShares);
+        vault.withdraw(shares);
+        stable.safeTransfer(msg.sender, shares);
     }
 
     /**
