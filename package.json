@@ -1,6 +1,7 @@
 {
-  "name": "yearn-protocol",
+  "name": "free-learn",
   "devDependencies": {
+    "@openzeppelin/contracts": "^4.5.0",
     "ethlint": "^1.2.5",
     "husky": "^4.3.0",
     "prettier": "^2.3.1",

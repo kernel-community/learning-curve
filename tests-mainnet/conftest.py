@@ -2,7 +2,7 @@ import pytest
 import time
 import constants_mainnet
 from brownie import (
-    KernelFactory,
+    DeSchool,
     LearningCurve,
     accounts,
     web3,
@@ -25,13 +25,13 @@ def deployer():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def contracts(deployer, dai):
-    learning_curve = LearningCurve.deploy(dai.address, {"from": deployer})
-    dai.transfer(deployer, 1e18, {"from": deployer})
-    dai.approve(learning_curve, 1e18, {"from": deployer})
+def contracts(deployer, token):
+    learning_curve = LearningCurve.deploy(token.address, {"from": deployer})
+    token.transfer(deployer, 1e18, {"from": deployer})
+    token.approve(learning_curve, 1e18, {"from": deployer})
     learning_curve.initialise({"from": deployer})
-    yield KernelFactory.deploy(
-        dai.address,
+    yield DeSchool.deploy(
+        token.address,
         learning_curve.address,
         constants_mainnet.REGISTRY,
         {"from": deployer}), \
@@ -40,27 +40,40 @@ def contracts(deployer, dai):
 
 @pytest.fixture(scope="function")
 def contracts_with_courses(contracts, steward):
-    kernel, learning_curve = contracts
+    deschool, learning_curve = contracts
     for n in range(5):
-        tx = kernel.createCourse(
-        constants_mainnet.FEE,
-        constants_mainnet.CHECKPOINTS,
-        constants_mainnet.CHECKPOINT_BLOCK_SPACING,
+        tx = deschool.createCourse(
+        constants_mainnet.STAKE,
+        constants_mainnet.DURATION,
         constants_mainnet.URL,
         steward,
         {"from": steward}
         )
-    yield kernel, learning_curve
+    yield deschool, learning_curve
 
 
 @pytest.fixture(scope="function")
+def contracts_with_scholarships(contracts_with_courses, token, deployer, provider):
+    deschool, learning_curve = contracts_with_courses
+    token.transfer(provider, (constants_mainnet.SCHOLARSHIP_AMOUNT * 5), {"from": deployer})
+    assert token.balanceOf(provider) == (constants_mainnet.SCHOLARSHIP_AMOUNT * 5)
+    token.approve(deschool, (constants_mainnet.SCHOLARSHIP_AMOUNT * 5), {"from": provider})
+    for n in range(5):
+        tx = deschool.createScholarships(
+            n,
+            constants_mainnet.SCHOLARSHIP_AMOUNT,
+            {"from": provider}
+        )
+    yield deschool, learning_curve
+
+@pytest.fixture(scope="function")
 def contracts_with_learners(contracts_with_courses, learners, token, deployer):
-    kernel, learning_curve = contracts_with_courses
+    deschool, learning_curve = contracts_with_courses
     for n, learner in enumerate(learners):
-        token.transfer(learner, constants_mainnet.FEE, {"from": deployer})
-        token.approve(kernel, constants_mainnet.FEE, {"from": learner})
-        kernel.register(0, {"from": learner})
-    yield kernel, learning_curve
+        token.transfer(learner, constants_mainnet.STAKE, {"from": deployer})
+        token.approve(deschool, constants_mainnet.STAKE, {"from": learner})
+        deschool.register(0, {"from": learner})
+    yield deschool, learning_curve
 
 
 @pytest.fixture
@@ -74,14 +87,14 @@ def learners(accounts):
 
 
 @pytest.fixture
-def hackerman(accounts):
-    yield accounts[9]
+def provider(accounts):
+    yield accounts[7]
 
 
 @pytest.fixture
-def dai():
-    yield Contract.from_explorer(constants_mainnet.DAI)
-
+def hackerman(accounts):
+    yield accounts[8]
+  
 
 @pytest.fixture
 def token():
@@ -89,18 +102,18 @@ def token():
 
 
 @pytest.fixture
-def ydai():
+def ytoken():
     yield Contract.from_explorer(constants_mainnet.VAULT)
 
 
 @pytest.fixture
 def gen_lev_strat():
-    yield Contract.from_explorer("0x6341c289b2E0795A04223DF04B53A77970958723")
+    yield Contract.from_explorer(constants_mainnet.GEN_LEV)
 
 
 @pytest.fixture
 def keeper():
-    yield accounts.at("0x736d7e3c5a6cb2ce3b764300140abf476f6cfccf", force=True)
+    yield accounts.at(constants_mainnet.KEEPER, force=True)
 
 
 @pytest.fixture
