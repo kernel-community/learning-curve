@@ -199,6 +199,7 @@ def test_register_scholar(contracts_with_scholarships, learners):
         0,
         {"from": learners[1]}
     )
+    assert not(deschool.scholarshipAvailable(0))
     with brownie.reverts("registerScholar: no scholarships available for this course"):
         tx = deschool.registerScholar(
             0,
@@ -206,6 +207,7 @@ def test_register_scholar(contracts_with_scholarships, learners):
         )
     brownie.chain.mine(constants_mainnet.DURATION)
     # this should now succeed
+    assert deschool.scholarshipAvailable(0)
     tx = deschool.registerScholar(
         0,
         {"from": learners[2]}

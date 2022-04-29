@@ -601,7 +601,8 @@ contract DeSchool {
         returns (bool) 
     {
         Course memory course = courses[_courseId];
-        return (course.scholarshipTotal / course.stake) > course.scholars || scholarData[_courseId][course.completedScholars].blockRegistered + course.duration <= block.number;
+        return (course.scholarshipTotal / course.stake) > course.scholars || 
+        scholarData[_courseId][course.completedScholars].blockRegistered + course.duration <= block.number;
     }
 
     function getCurrentBatchTotal() 
