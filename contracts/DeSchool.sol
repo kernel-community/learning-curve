@@ -601,15 +601,13 @@ contract DeSchool {
         returns (bool) 
     {
         Course memory course = courses[_courseId];
-        if ((course.scholarshipTotal / course.stake) <= course.scholars) {
-            if (scholarData[_courseId][course.completedScholars].blockRegistered + course.duration <= block.number) {
-                return true;
-            } else {
-                return false;
-            }
-        } else {
+        if (
+            (course.scholarshipTotal / course.stake) > course.scholars ||
+            scholarData[_courseId][course.completedScholars].blockRegistered + course.duration <= block.number
+        ) {
             return true;
         }
+        return false;
     }
 
     function getCurrentBatchTotal() 
