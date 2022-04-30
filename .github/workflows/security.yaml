@@ -1,4 +1,4 @@
-name: Security-checks
+name: Slither Analysis
 
 on:
   push:
@@ -6,34 +6,16 @@ on:
   pull_request:
 
 jobs:
-  main_job:
+  analyze:
     runs-on: ubuntu-latest
-    name: Solidity Security
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-      - uses: actions/setup-python@v2
-        with:
-         python-version: '3.8'
-      - name: Prepare environment
-        run: |
-         npm install -g ganache-cli@6.12.1
-         pip3 install solc-select
-         solc-select install 0.8.3
-         solc-select use 0.8.3
-         pip3 install slither-analyzer
-         pip install -r requirements-dev.txt
-      - name: Slither Static Analysis
-        uses: crytic/slither-action@v0.1.1
-        continue-on-error: true
-        id: slither
-        with:
-          sarif: results.sarif
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v1
-        with:
-          sarif_file: ${{ steps.slither.outputs.sarif }}
+    - name: Run Slither
+      uses: crytic/slither-action@v0.1.1
+      continue-on-error: true
+      id: slither
