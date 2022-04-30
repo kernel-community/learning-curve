@@ -14,5 +14,5 @@ def _flattener(contracts_to_flatten):
 
 
 def main():
-    contracts_to_flatten = [LearningCurve, KernelFactory]
+    contracts_to_flatten = [LearningCurve, DeSchool]
     _flattener(contracts_to_flatten)
