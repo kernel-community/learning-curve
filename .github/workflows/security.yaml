@@ -14,7 +14,14 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-
+    - name: Prepare environment
+      run: |
+        npm install -g ganache-cli@6.12.1
+        pip3 install solc-select
+        solc-select install 0.8.4
+        solc-select use 0.8.4
+        pip3 install slither-analyzer
+        pip install -r requirements-dev.txt
     - name: Run Slither
       uses: crytic/slither-action@v0.1.1
       continue-on-error: true
