@@ -98,10 +98,6 @@ contract DeSchool {
         uint256 indexed courseId, 
         address scholar
     );
-    event PerpetualScholarships (
-        uint256 indexed courseId,
-        uint256 newScholars
-    );
     event ScholarshipWithdrawn(
         uint256 indexed courseId,
         uint256 amountWithdrawn
@@ -599,12 +595,14 @@ contract DeSchool {
         }
     }
 
-    function getScholars(uint256 _courseId) 
+    function scholarshipAvailable(uint256 _courseId) 
         external 
         view 
-        returns (uint256) 
+        returns (bool) 
     {
-        return courses[_courseId].scholars;
+        Course memory course = courses[_courseId];
+        return (course.scholarshipTotal / course.stake) > course.scholars || 
+        scholarData[_courseId][course.completedScholars].blockRegistered + course.duration <= block.number;
     }
 
     function getCurrentBatchTotal() 
