@@ -6,5 +6,5 @@
   "exclude_high": false,
   "disable_color": false,
   "filter_paths": "test|OpenZeppelin|iearn-finance",
-  "solc": "0.8.4"
+  "solc": "0.8.3"
 }

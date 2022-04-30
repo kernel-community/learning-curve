@@ -11,10 +11,10 @@ jobs:
     name: Solidity Security
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - uses: actions/setup-node@v1.4.4
+        uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: '12'
+          node-version: '16'
       - uses: actions/setup-python@v2
         with:
          python-version: '3.8'
@@ -26,18 +26,14 @@ jobs:
          solc-select use 0.8.3
          pip3 install slither-analyzer
          pip install -r requirements-dev.txt
-      - name: Prepare contracts
-        shell: bash
-        run: |
-          npm run sec:flatten
       - name: Slither Static Analysis
-        uses: luisfontes19/slither-static-analysis-action@v0.3.2
+        uses: crytic/slither-action@v0.1.1
+        continue-on-error: true
+        id: slither
         with:
-          slither-version: '0.6.13'
-          run-npm-install: true
-          high-threshold: 0
-          medium-threshold: 21
-          low-threshold: 30
-          optimization-threshold: 999
-          informative-threshold: 999
-          projectPath: "./flattened"
+          sarif: results.sarif
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: ${{ steps.slither.outputs.sarif }}
