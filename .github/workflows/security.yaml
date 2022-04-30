@@ -28,8 +28,6 @@ jobs:
          pip install -r requirements-dev.txt
       - name: Prepare contracts
         shell: bash
-        run: |
-          npm run sec:flatten
       - name: Slither Static Analysis
         uses: luisfontes19/slither-static-analysis-action@v0.3.2
         with:
