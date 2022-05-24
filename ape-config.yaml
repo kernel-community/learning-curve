@@ -1,0 +1,9 @@
+name: learning-curve
+dependencies:
+  - name: OpenZeppelin
+    github: OpenZeppelin/openzeppelin-contracts
+    version: 4.0.0
+
+solidity:
+  import_remapping:
+    - "@openzeppelin=OpenZeppelin/4.0.0"
