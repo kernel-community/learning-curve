@@ -1,6 +1,1 @@
-compiler:
-  solc:
-    remappings:
-      - '@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.0.0'
-dependencies:
-  - OpenZeppelin/openzeppelin-contracts@4.0.0
+name: "learning-curve"
