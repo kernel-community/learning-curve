@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.0;
 
 import "./ERC20.sol";
 import "./SafeTransferLib.sol";
@@ -42,7 +42,7 @@ contract DeSchool {
 
     // containing learner data mapped by a courseId and address
     mapping(uint256 => mapping(address => Learner)) learnerData;
-    // containing scholar data mapped by a courseId and address
+    // containing scholar data mapped by a courseId and the block registered
     mapping(uint256 => mapping(uint256 => Scholar)) scholarData;
     // containing scholarship provider amount mapped by courseId and address
     mapping(uint256 => mapping(address => uint256)) providerAmount;
