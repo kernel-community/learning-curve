@@ -5,6 +5,28 @@ from eth_account._utils.structured_data.hashing import hash_domain
 from eth_account.messages import encode_structured_data
 from eth_utils import encode_hex
 
+def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ytoken, steward):
+    deschool, learning_curve = contracts_with_learners
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
+    tx = deschool.batchDeposit({"from": keeper})
+    brownie.chain.mine(constants_mainnet.DURATION)
+    brownie.chain.sleep(1000)
+    gen_lev_strat.harvest({"from": keeper})
+    for n, learner in enumerate(learners):
+        mintable_balance = learning_curve.getMintableForReserveAmount(constants_mainnet.STAKE)
+        lc_token_balance = token.balanceOf(learning_curve)
+        ds_token_balance = token.balanceOf(deschool)
+        learner_lc_balance = learning_curve.balanceOf(learner)
+        tx = deschool.mint(0, {"from": learner})
+        assert "LearnMintedFromCourse" in tx.events
+        assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
+        assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
+        assert deschool.verify(learner, 0)
+        assert abs(token.balanceOf(learning_curve) - lc_token_balance - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
+        assert abs(token.balanceOf(deschool) - deschool.getYieldRewards(0)) < constants_mainnet.ACCURACY
+        assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
+    assert token.balanceOf(deschool) == deschool.getYieldRewards(0)
+    assert ytoken.balanceOf(deschool) < 1000
 
 def test_batch_success(
         contracts_with_learners,
@@ -62,31 +84,6 @@ def test_register_diff_batches(contracts_with_courses, keeper, token, learners, 
         assert ds_balance_before == tx.events["BatchDeposited"]["batchAmount"] == constants_mainnet.STAKE
         assert ytoken.balanceOf(deschool) > ytoken_bal_before
         assert ytoken.balanceOf(deschool) - ytoken_bal_before == tx.events["BatchDeposited"]["batchYieldAmount"]
-
-
-def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ytoken, steward):
-    deschool, learning_curve = contracts_with_learners
-    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
-    tx = deschool.batchDeposit({"from": keeper})
-    brownie.chain.mine(constants_mainnet.DURATION)
-    brownie.chain.sleep(1000)
-    gen_lev_strat.harvest({"from": keeper})
-
-    for n, learner in enumerate(learners):
-        mintable_balance = learning_curve.getMintableForReserveAmount(constants_mainnet.STAKE)
-        lc_token_balance = token.balanceOf(learning_curve)
-        ds_token_balance = token.balanceOf(deschool)
-        learner_lc_balance = learning_curve.balanceOf(learner)
-        tx = deschool.mint(0, {"from": learner})
-        assert "LearnMintedFromCourse" in tx.events
-        assert abs(tx.events["LearnMintedFromCourse"]["learnMinted"] - mintable_balance) < constants_mainnet.ACCURACY_Y
-        assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
-        assert deschool.verify(learner, 0)
-        assert abs(token.balanceOf(learning_curve) - lc_token_balance - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
-        assert abs(token.balanceOf(deschool) - deschool.getYieldRewards(steward.address)) < constants_mainnet.ACCURACY
-        assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(deschool) == deschool.getYieldRewards(steward.address)
-    assert ytoken.balanceOf(deschool) < 1000
 
 
 def test_verify(contracts_with_learners, learners, keeper):

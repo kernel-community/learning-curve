@@ -1,13 +1,12 @@
 //SPDX-License-Identifier: MPL-2.0
 pragma solidity 0.8.13;
 
+import "./ERC20.sol";
+import "./SafeTransferLib.sol";
 import "./interfaces/I_Vault.sol";
 import "./interfaces/I_Registry.sol";
 import "./interfaces/IERC20Permit.sol";
 import "./interfaces/I_LearningCurve.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title DeSchool
@@ -16,8 +15,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  */
 
 contract DeSchool {
-    using SafeERC20 for IERC20;
-    using Counters for Counters.Counter;
 
     struct Course {
         uint256 stake; // an amount in DAI to be staked for the duration course
@@ -29,10 +26,6 @@ contract DeSchool {
         uint256 scholarshipTotal; // the total amount of DAI provided for scholarships for this course
         address scholarshipVault; // one scholarship vault per course, any new scholarships are simply added to it
         uint256 scholarshipYield; // the yield, in yTokens, earned by the course creator from scholarships
-    }
-
-    struct Provider {
-        uint256 amount; // the amount provided for scholarships for this particular course 
     }
 
     struct Scholar {
@@ -51,8 +44,8 @@ contract DeSchool {
     mapping(uint256 => mapping(address => Learner)) learnerData;
     // containing scholar data mapped by a courseId and address
     mapping(uint256 => mapping(uint256 => Scholar)) scholarData;
-    // containing scholarship provider data mapped by courseId and address
-    mapping(uint256 => mapping(address => Provider)) providerData;
+    // containing scholarship provider amount mapped by courseId and address
+    mapping(uint256 => mapping(address => uint256)) providerAmount;
     // containg currentScholar data mapped by a courseId and address for register() check
     mapping(uint256 => mapping(address => Scholar)) registered;
 
@@ -67,16 +60,16 @@ contract DeSchool {
     mapping(address => uint256) yieldRewards;
 
     // tracker for the courseId, current represents the id of the next course
-    Counters.Counter private courseIdTracker;
+    uint256 private courseIdTracker;
     // tracker for the batchId, current represents the current batch
-    Counters.Counter private batchIdTracker;
+    uint256 private batchIdTracker;
 
     // the stablecoin used by the contract, DAI
-    IERC20 public stable;
+    ERC20 public immutable stable;
     // the yearn registry used by the contract, to determine what the yDai address is.
-    I_Registry public registry;
+    I_Registry public immutable registry;
     // interface for the learning curve
-    I_LearningCurve public learningCurve;
+    I_LearningCurve public immutable learningCurve;
 
     event CourseCreated(
         uint256 indexed courseId,
@@ -132,7 +125,7 @@ contract DeSchool {
         address _learningCurve,
         address _registry
     ) {
-        stable = IERC20(_stable);
+        stable = ERC20(_stable);
         learningCurve = I_LearningCurve(_learningCurve);
         registry = I_Registry(_registry);
     }
@@ -162,8 +155,8 @@ contract DeSchool {
             _creator != address(0),
             "createCourse: creator cannot be 0 address"
         );
-        uint256 courseId_ = courseIdTracker.current();
-        courseIdTracker.increment();
+        uint256 courseId_ = courseIdTracker;
+        courseIdTracker++;
         courses[courseId_] = Course(
             _stake,
             _duration,
@@ -198,12 +191,12 @@ contract DeSchool {
             "createScholarships: must seed scholarship with enough funds to justify gas costs"
         );
         require(
-            _courseId < courseIdTracker.current(),
+            _courseId < courseIdTracker,
             "createScholarships: courseId does not exist"
         );
         Course storage course = courses[_courseId];
         
-        stable.safeTransferFrom(msg.sender, address(this), _amount);
+        SafeTransferLib.safeTransferFrom(stable, msg.sender, address(this), _amount);
 
         // get the address of the scholarshipVault if it exists, otherwise get the latest vault from the yRegistry
         if (course.scholarshipVault != address(0)) {
@@ -218,7 +211,7 @@ contract DeSchool {
         }
 
         // set providerData to ensure withdrawals are possible
-        providerData[_courseId][msg.sender].amount += _amount;
+        providerAmount[_courseId][msg.sender] += _amount;
 
         // add this scholarship provided to any pre-existing amount
         course.scholarshipTotal += _amount;
@@ -234,7 +227,7 @@ contract DeSchool {
         );
     }
 
-        /**
+    /**
      * @notice          handles learner registration with permit. This enable learners to register with only one transaction,
      *                  rather than two, i.e. approve DeSchool to spend your DAI, and only then register. This saves gas for
      *                  learners and improves the UX.
@@ -266,7 +259,7 @@ contract DeSchool {
         public 
     {
         require(
-            _courseId < courseIdTracker.current(),
+            _courseId < courseIdTracker,
             "registerScholar: courseId does not exist"
         );
         Course storage course = courses[_courseId];
@@ -306,17 +299,17 @@ contract DeSchool {
         public 
     {
         require(
-            providerData[_courseId][msg.sender].amount >= _amount,
+            providerAmount[_courseId][msg.sender] >= _amount,
             "withdrawScholarship: can only withdraw up to the amount initally provided for scholarships"
         );
         Course storage course =  courses[_courseId];
         I_Vault vault = I_Vault(course.scholarshipVault);
         // check to make sure the vault has not made a loss
-        uint256 temp = (_amount * 1e18) / providerData[_courseId][msg.sender].amount;
+        uint256 temp = (_amount * 1e18) / providerAmount[_courseId][msg.sender];
         uint256 providerShares = (temp * course.scholarshipYield) / 1e18;
 
         // first, mark down the amount provided
-        providerData[_courseId][msg.sender].amount -= _amount;
+        providerAmount[_courseId][msg.sender] -= _amount;
         // we only need to subtract from the total scholarship for this course, as that is what is used to
         // check when registering new scholars.
         course.scholarshipTotal -= _amount;
@@ -326,9 +319,8 @@ contract DeSchool {
             _amount
         );
         // withdraw amount from scholarshipVault for this course and return to provider
-        uint256 shares = vault.withdraw(providerShares);
-        vault.withdraw(shares);
-        stable.safeTransfer(msg.sender, shares);
+        uint256 collateral = vault.withdraw(providerShares);
+        SafeTransferLib.safeTransfer(stable, msg.sender, collateral);
     }
 
     /**
@@ -341,10 +333,10 @@ contract DeSchool {
     function batchDeposit() 
         external 
     {
-        uint256 batchId_ = batchIdTracker.current();
+        uint256 batchId_ = batchIdTracker;
         // initiate the next batch
         uint256 batchAmount_ = batchTotal[batchId_];
-        batchIdTracker.increment();
+        batchIdTracker++;
         require(batchAmount_ > 0, "batchDeposit: no funds to deposit");
         // get the address of the vault from the yRegistry
         I_Vault vault = I_Vault(registry.latestVault(address(stable)));
@@ -365,17 +357,17 @@ contract DeSchool {
         public 
     {
         require(
-            _courseId < courseIdTracker.current(),
+            _courseId < courseIdTracker,
             "register: courseId does not exist"
         );
-        uint256 batchId_ = batchIdTracker.current();
+        uint256 batchId_ = batchIdTracker;
         require(
             learnerData[_courseId][msg.sender].blockRegistered == 0,
             "register: already registered"
         );
         Course memory course = courses[_courseId];
 
-        stable.safeTransferFrom(msg.sender, address(this), course.stake);
+        SafeTransferLib.safeTransferFrom(stable, msg.sender, address(this), course.stake);
 
         learnerData[_courseId][msg.sender].blockRegistered = block.number;
         learnerData[_courseId][msg.sender].yieldBatchId = batchId_;
@@ -423,7 +415,7 @@ contract DeSchool {
         returns (bool completed)
     {
         require(
-            _courseId < courseIdTracker.current(),
+            _courseId < courseIdTracker,
             "verify: courseId does not exist"
         );
         require(
@@ -449,7 +441,7 @@ contract DeSchool {
     function redeem(uint256 _courseId) 
         external 
     {
-        uint256 shares;
+        uint256 collateral;
         uint256 learnerShares;
         require(
             learnerData[_courseId][msg.sender].blockRegistered != 0,
@@ -459,6 +451,7 @@ contract DeSchool {
             verify(msg.sender, _courseId), 
             "redeem: not yet eligible - wait for the full course duration to pass"
         );
+        Course memory course = courses[_courseId];
         if (isDeployed(_courseId)) {
             I_Vault vault = I_Vault(
                 batchYieldAddress[
@@ -466,28 +459,28 @@ contract DeSchool {
                 ]
             );
             uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-            uint256 temp = (courses[_courseId].stake * 1e18) / batchTotal[batchId_];
+            uint256 temp = (course.stake * 1e18) / batchTotal[batchId_];
             learnerShares = (temp * batchYieldTotal[batchId_]) / 1e18;
-            shares = vault.withdraw(learnerShares);
-            if (courses[_courseId].stake < shares) {
-                yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].stake;
-                emit StakeRedeemed(_courseId, msg.sender, courses[_courseId].stake);
-                stable.safeTransfer(msg.sender, courses[_courseId].stake);
+            collateral = vault.withdraw(learnerShares);
+            if (course.stake < collateral) {
+                yieldRewards[course.creator] += collateral - course.stake;
+                emit StakeRedeemed(_courseId, msg.sender, course.stake);
+                SafeTransferLib.safeTransfer(stable, msg.sender, course.stake);
             } else {
                 emit StakeRedeemed(
                     _courseId, 
                     msg.sender, 
-                    shares
+                    collateral
                 );
-                stable.safeTransfer(msg.sender, shares);
+                SafeTransferLib.safeTransfer(stable, msg.sender, collateral);
             }
         } else {
             emit StakeRedeemed(
                 _courseId, 
                 msg.sender, 
-                courses[_courseId].stake
+                course.stake
             );
-            stable.safeTransfer(msg.sender, courses[_courseId].stake);
+            SafeTransferLib.safeTransfer(stable, msg.sender, course.stake);
         }
     }
 
@@ -503,7 +496,7 @@ contract DeSchool {
     function mint(uint256 _courseId) 
         external 
     {
-        uint256 shares;
+        uint256 collateral;
         uint256 learnerShares;
         require(
             learnerData[_courseId][msg.sender].blockRegistered != 0,
@@ -513,6 +506,7 @@ contract DeSchool {
             verify(msg.sender, _courseId), 
             "mint: not yet eligible - wait for the full course duration to pass"
         );
+        Course memory course = courses[_courseId];
         if (isDeployed(_courseId)) {
             I_Vault vault = I_Vault(
                 batchYieldAddress[
@@ -520,29 +514,29 @@ contract DeSchool {
                 ]
             );
             uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-            uint256 temp = (courses[_courseId].stake * 1e18) / batchTotal[batchId_];
+            uint256 temp = (course.stake * 1e18) / batchTotal[batchId_];
             learnerShares = (temp * batchYieldTotal[batchId_]) / 1e18;
-            shares = vault.withdraw(learnerShares);
+            collateral = vault.withdraw(learnerShares);
         }
-        if (courses[_courseId].stake < shares) {
-            yieldRewards[courses[_courseId].creator] += shares - courses[_courseId].stake;
-            stable.approve(address(learningCurve), courses[_courseId].stake);
+        if (course.stake < collateral) {
+            yieldRewards[course.creator] += collateral - course.stake;
+            stable.approve(address(learningCurve), course.stake);
             uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-            learningCurve.mintForAddress(msg.sender, courses[_courseId].stake);
+            learningCurve.mintForAddress(msg.sender, course.stake);
             emit LearnMintedFromCourse(
                 _courseId,
                 msg.sender,
-                courses[_courseId].stake,
+                course.stake,
                 learningCurve.balanceOf(msg.sender) - balanceBefore
             );
         } else {
-            stable.approve(address(learningCurve), courses[_courseId].stake);
+            stable.approve(address(learningCurve), course.stake);
             uint256 balanceBefore = learningCurve.balanceOf(msg.sender);
-            learningCurve.mintForAddress(msg.sender, courses[_courseId].stake);
+            learningCurve.mintForAddress(msg.sender, course.stake);
             emit LearnMintedFromCourse(
                 _courseId,
                 msg.sender,
-                courses[_courseId].stake,
+                course.stake,
                 learningCurve.balanceOf(msg.sender) - balanceBefore
             );
         }
@@ -574,7 +568,7 @@ contract DeSchool {
         withdrawableReward += getYieldRewards(_courseId);
         yieldRewards[courses[_courseId].creator] = 0;
         emit YieldRewardRedeemed(courses[_courseId].creator, withdrawableReward);
-        stable.safeTransfer(courses[_courseId].creator, withdrawableReward);
+        SafeTransferLib.safeTransfer(stable, courses[_courseId].creator, withdrawableReward);
     }
 
     /**
@@ -588,7 +582,7 @@ contract DeSchool {
         returns (bool deployed)
     {
         uint256 batchId_ = learnerData[_courseId][msg.sender].yieldBatchId;
-        if (batchId_ == batchIdTracker.current()) {
+        if (batchId_ == batchIdTracker) {
             return false;
         } else {
             return true;
@@ -610,7 +604,7 @@ contract DeSchool {
         view 
         returns (uint256) 
     {
-        return batchTotal[batchIdTracker.current()];
+        return batchTotal[batchIdTracker];
     }
 
     function getBlockRegistered(address learner, uint256 courseId)
@@ -626,15 +620,15 @@ contract DeSchool {
         view 
         returns (uint256) 
     {
-        return batchIdTracker.current();
+        return batchIdTracker;
     }
 
     function getNextCourseId() 
         external 
         view 
-        returns (uint256) 
+        returns (uint256)
     {
-        return courseIdTracker.current();
+        return courseIdTracker;
     }
 
     function getCourseUrl(uint256 _courseId)
