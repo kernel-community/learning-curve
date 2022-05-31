@@ -42,11 +42,14 @@ contract DeSchool {
 
     // containing learner data mapped by a courseId and address
     mapping(uint256 => mapping(address => Learner)) learnerData;
-    // containing scholar data mapped by a courseId and the block registered
+    // containing scholar data mapped by a courseId and the number of "completed" scholars.
+    // We keep track of this separately from the number of scholars in order to lookup the "active" scholar
+    // who registered most long ago, check if the course duration has passed has passed since they registered 
+    // and, if it has, we replace them with a new scholar
     mapping(uint256 => mapping(uint256 => Scholar)) scholarData;
     // containing scholarship provider amount mapped by courseId and address
     mapping(uint256 => mapping(address => uint256)) providerAmount;
-    // containg currentScholar data mapped by a courseId and address for register() check
+    // containg currentScholar data mapped by a courseId and address for the require in registerScholar()
     mapping(uint256 => mapping(address => Scholar)) registered;
 
     // containing the total underlying amount for a yield batch mapped by batchId
