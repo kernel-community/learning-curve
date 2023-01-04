@@ -569,6 +569,7 @@ contract DeSchool {
         uint256 withdrawableReward;
         // add to the withdrawableRewards any yield from learner deposits who are not scholars
         withdrawableReward = yieldRewards[msg.sender];
+        require(withdrawableReward > 0, "withdrawYieldRewards: No yield to withdraw");
         yieldRewards[msg.sender] = 0;
         emit YieldRewardRedeemed(msg.sender, withdrawableReward);
         SafeTransferLib.safeTransfer(stable, msg.sender, withdrawableReward);
