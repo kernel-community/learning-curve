@@ -62,7 +62,7 @@ def test_full_redeem(
         print("Learner " + str(n) + " token balance: " + str(token.balanceOf(learner)))
         print("YDAI Balance: " + str(ytoken.balanceOf(deschool)))
         print("redeemable DAI Balance of Creator: " +
-              str(deschool.getYieldRewards(kernelTreasury.address, {"from": kernelTreasury}))
+              str(deschool.getYieldRewards(steward, {"from": kernelTreasury}))
               )
         print("DAI collateral: " + str(token.balanceOf(learning_curve)))
         print("Total Supply: " + str(learning_curve.totalSupply()))

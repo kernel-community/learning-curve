@@ -642,4 +642,8 @@ contract DeSchool {
     {
         return courses[_courseId].url;
     }
+     
+    function getYieldRewards(address creator) external view returns (uint256) {
+        return yieldRewards[creator];
+    }
 }

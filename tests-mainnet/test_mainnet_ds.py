@@ -5,6 +5,34 @@ from eth_account._utils.structured_data.hashing import hash_domain
 from eth_account.messages import encode_structured_data
 from eth_utils import encode_hex
 
+def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_lev_strat, ytoken):
+    deschool, learning_curve = contracts_with_learners
+    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
+    tx = deschool.batchDeposit({"from": keeper})
+    brownie.chain.mine(constants_mainnet.DURATION)
+    brownie.chain.sleep(1000)
+    gen_lev_strat.harvest({"from": keeper})
+    for n, learner in enumerate(learners):
+        learner_before = token.balanceOf(learner)
+        ds_ytoken_balance = ytoken.balanceOf(deschool)
+        tx = deschool.redeem(0, {"from": learner})
+        learner_after = token.balanceOf(learner)
+        assert "StakeRedeemed" in tx.events
+        assert tx.events["StakeRedeemed"]["amount"] == learner_after - learner_before
+        assert tx.events["StakeRedeemed"]["amount"] <= constants_mainnet.STAKE
+        assert deschool.verify(learner, 0)
+        assert token.balanceOf(steward) == 0
+        assert deschool.getYieldRewards(steward.address, {"from": steward}) > 0
+        assert ytoken.balanceOf(deschool) < ds_ytoken_balance
+        assert token.balanceOf(learning_curve) == 1e18
+        assert ytoken.balanceOf(learning_curve) == 0
+    kt_redemption = deschool.getYieldRewards(steward.address, {"from": steward})
+    deschool.withdrawYieldRewards({"from": steward})
+    assert deschool.getYieldRewards(steward.address, {"from": steward}) == 0
+    assert token.balanceOf(steward) == kt_redemption
+    assert token.balanceOf(deschool) == 0
+    assert ytoken.balanceOf(deschool) < 1000
+    
 def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, ytoken, steward):
     deschool, learning_curve = contracts_with_learners
     brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
@@ -23,9 +51,9 @@ def test_mint(contracts_with_learners, learners, token, keeper, gen_lev_strat, y
         assert abs(tx.events["LearnMintedFromCourse"]["stableConverted"] - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
         assert deschool.verify(learner, 0)
         assert abs(token.balanceOf(learning_curve) - lc_token_balance - constants_mainnet.STAKE) < constants_mainnet.ACCURACY_Y
-        assert abs(token.balanceOf(deschool) - deschool.getYieldRewards(0)) < constants_mainnet.ACCURACY
+        assert abs(token.balanceOf(deschool) - deschool.getYieldRewards(steward.address)) < constants_mainnet.ACCURACY
         assert abs(learning_curve.balanceOf(learner) - learner_lc_balance - mintable_balance) < constants_mainnet.ACCURACY_Y
-    assert token.balanceOf(deschool) == deschool.getYieldRewards(0)
+    assert token.balanceOf(deschool) == deschool.getYieldRewards(steward.address)
     assert ytoken.balanceOf(deschool) < 1000
 
 def test_batch_success(
@@ -294,29 +322,3 @@ def test_register_permit(contracts_with_courses, learners, token, deployer):
     assert "LearnerRegistered" in tx.events
     assert tx.events["LearnerRegistered"]["courseId"] == 0
 
-
-def test_redeem(contracts_with_learners, learners, token, steward, keeper, gen_lev_strat, ytoken):
-    deschool, learning_curve = contracts_with_learners
-    brownie.chain.mine(constants_mainnet.COURSE_RUNNING)
-    tx = deschool.batchDeposit({"from": keeper})
-    brownie.chain.mine(constants_mainnet.DURATION)
-    brownie.chain.sleep(1000)
-    gen_lev_strat.harvest({"from": keeper})
-    for n, learner in enumerate(learners):
-        ds_ytoken_balance = ytoken.balanceOf(deschool)
-        tx = deschool.redeem(0, {"from": learner})
-        assert "StakeRedeemed" in tx.events
-        assert tx.events["StakeRedeemed"]["amount"] == constants_mainnet.STAKE
-        assert deschool.verify(learner, 0)
-        assert token.balanceOf(steward) == 0
-        assert deschool.getYieldRewards(steward, {"from": steward}) > 0
-        assert ytoken.balanceOf(deschool) < ds_ytoken_balance
-        assert token.balanceOf(learner) == constants_mainnet.STAKE
-        assert token.balanceOf(learning_curve) == 1e18
-        assert ytoken.balanceOf(learning_curve) == 0
-    kt_redemption = deschool.getYieldRewards(steward, {"from": steward})
-    deschool.withdrawYieldRewards({"from": steward})
-    assert deschool.getYieldRewards(steward, {"from": steward}) == 0
-    assert token.balanceOf(steward) == kt_redemption
-    assert token.balanceOf(deschool) == 0
-    assert ytoken.balanceOf(deschool) < 1000
