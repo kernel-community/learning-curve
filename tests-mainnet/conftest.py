@@ -21,7 +21,7 @@ def isolate_func(fn_isolation):
 
 @pytest.fixture
 def deployer():
-    yield accounts.at("0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503", force=True)
+    yield accounts.at("0x075e72a5eDf65F0A5f44699c7654C1a76941Ddc8", force=True)
 
 
 @pytest.fixture(scope="function", autouse=True)

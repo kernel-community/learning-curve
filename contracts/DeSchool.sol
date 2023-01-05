@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MPL-2.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.13;
 
 import "./ERC20.sol";
 import "./SafeTransferLib.sol";
@@ -25,7 +25,7 @@ contract DeSchool {
         uint256 completedScholars; // keep track of how many scholars have completed the course
         uint256 scholarshipTotal; // the total amount of DAI provided for scholarships for this course
         address scholarshipVault; // one scholarship vault per course, any new scholarships are simply added to it
-        uint256 scholarshipYield; // the yield, in yTokens, earned by the course creator from scholarships
+        uint256 scholarshipYTokens; // the yTokens, earned by the course creator from scholarships
     }
 
     struct Scholar {
@@ -167,8 +167,8 @@ contract DeSchool {
             _creator,
             0, // no scholars when a course is first created
             0, // scholarshipAmount is similarly 0.
-            0, // no copleted scholars yet 
-            address(0), // scholarshipVault address unset at coures creation
+            0, // no completed scholars yet 
+            address(0), // scholarshipVault address unset at course creation
             0 // scholarshipYield also 0
         );
         emit CourseCreated(
@@ -205,12 +205,12 @@ contract DeSchool {
         if (course.scholarshipVault != address(0)) {
             I_Vault vault = I_Vault(course.scholarshipVault);
             stable.approve(course.scholarshipVault, _amount);
-            course.scholarshipYield += vault.deposit(_amount);
+            course.scholarshipYTokens += vault.deposit(_amount);
         } else {
             I_Vault newVault = I_Vault(registry.latestVault(address(stable)));
             course.scholarshipVault = address(newVault);
             stable.approve(course.scholarshipVault, _amount);
-            course.scholarshipYield = newVault.deposit(_amount);
+            course.scholarshipYTokens = newVault.deposit(_amount);
         }
 
         // set providerData to ensure withdrawals are possible
@@ -226,7 +226,7 @@ contract DeSchool {
             course.scholarshipTotal,
             msg.sender,
             course.scholarshipVault,
-            course.scholarshipYield
+            course.scholarshipYTokens
         );
     }
 
@@ -307,10 +307,14 @@ contract DeSchool {
         );
         Course storage course =  courses[_courseId];
         I_Vault vault = I_Vault(course.scholarshipVault);
-        // check to make sure the vault has not made a loss
-        uint256 temp = (_amount * 1e18) / providerAmount[_courseId][msg.sender];
-        uint256 providerShares = (temp * course.scholarshipYield) / 1e18;
-
+        // get the proportional amount of shares the user owns
+        uint256 providerShares = (((_amount * 1e18) / course.scholarshipTotal) * (course.scholarshipYTokens)) / 1e18;
+        // in case of rounding errors we want to cap provider shares at the total number of ytokens on the scholarship
+        if (providerShares > course.scholarshipYTokens) {
+            providerShares = course.scholarshipYTokens;
+        }
+        // reduce the number of ytokens
+        course.scholarshipYTokens -= providerShares;
         // first, mark down the amount provided
         providerAmount[_courseId][msg.sender] -= _amount;
         // we only need to subtract from the total scholarship for this course, as that is what is used to
@@ -323,6 +327,13 @@ contract DeSchool {
         );
         // withdraw amount from scholarshipVault for this course and return to provider
         uint256 collateral = vault.withdraw(providerShares);
+        // check if the collateral returned is greater than the amount passed in
+        // if it is then we take away the excess and allocate it to the course creator
+        // as yield rewards and send the original amount back to the scholarship provider
+        if (collateral > _amount) {
+            yieldRewards[course.creator] = collateral - _amount;
+            collateral = _amount;
+        }
         SafeTransferLib.safeTransfer(stable, msg.sender, collateral);
     }
 
@@ -551,27 +562,17 @@ contract DeSchool {
      *                  the scholarship is created and may be claimed at any time thereafter.
      *                  There may also be yield from any learners who have registered in the case no scholarships are available.
      *                  When the learner decides to redeem or mint their stake, this yield is assigned to the creator.
-     * @param _courseId only course creators can claim yield. The information for how much yield they can claim
-     *                  is always accessible via the courseId.
      */
-    function withdrawYieldRewards(uint256 _courseId) 
+    function withdrawYieldRewards() 
         external 
     {
-        require(
-            msg.sender == courses[_courseId].creator,
-            "withdrawYieldRewards: only course creator can withdraw yield"
-        );
         uint256 withdrawableReward;
-        // if there is yield from scholarships, withdraw it all
-        if (courses[_courseId].scholarshipYield != 0) {
-            withdrawableReward = courses[_courseId].scholarshipYield;
-            courses[_courseId].scholarshipYield = 0;
-        }
         // add to the withdrawableRewards any yield from learner deposits who are not scholars
-        withdrawableReward += getYieldRewards(_courseId);
-        yieldRewards[courses[_courseId].creator] = 0;
-        emit YieldRewardRedeemed(courses[_courseId].creator, withdrawableReward);
-        SafeTransferLib.safeTransfer(stable, courses[_courseId].creator, withdrawableReward);
+        withdrawableReward = yieldRewards[msg.sender];
+        require(withdrawableReward > 0, "withdrawYieldRewards: No yield to withdraw");
+        yieldRewards[msg.sender] = 0;
+        emit YieldRewardRedeemed(msg.sender, withdrawableReward);
+        SafeTransferLib.safeTransfer(stable, msg.sender, withdrawableReward);
     }
 
     /**
@@ -641,13 +642,8 @@ contract DeSchool {
     {
         return courses[_courseId].url;
     }
-
-    function getYieldRewards(uint256 _courseId) 
-        public 
-        view 
-        returns (uint256) 
-    {
-        uint256 yield = yieldRewards[courses[_courseId].creator] + courses[_courseId].scholarshipYield;
-        return yield;
+     
+    function getYieldRewards(address creator) external view returns (uint256) {
+        return yieldRewards[creator];
     }
 }

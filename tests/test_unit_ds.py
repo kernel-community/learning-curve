@@ -19,6 +19,7 @@ def test_register_permit(contracts_with_courses, learners, token, deployer):
     print(token.balanceOf(deschool.address))
     tx = deschool.permitAndRegister(0, 0, 0, signed.v, signed.r, signed.s, {"from": holder})
     print(token.balanceOf(deschool.address))
+    print(deschool.getYieldRewards(deployer.address))
     assert "LearnerRegistered" in tx.events
     assert tx.events["LearnerRegistered"]["courseId"] == 0
 
