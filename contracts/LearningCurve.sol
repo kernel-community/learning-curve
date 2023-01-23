@@ -32,7 +32,7 @@ contract LearningCurve is ERC20 {
         uint256 e
     );
 
-    constructor(address _reserve) ERC20("Learning Curve", "LEARN", 18) {
+    constructor(address _reserve) ERC20("FreeLearn", "LEARN", 18) {
         reserve = ERC20(_reserve);
     }
 

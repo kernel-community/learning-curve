@@ -30,27 +30,18 @@ brownie test tests-mainnet --network=mainnet-fork -s
 
 ## Current gas report
 ```
-KernelFactory <Contract>
-   ├─ constructor                 -  avg: 1518979  avg (confirmed): 1518979  low: 1518979  high: 1518979
-   ├─ redeem                      -  avg:   58728  avg (confirmed):   60658  low:   22563  high:   92004
-   ├─ mint                        -  avg:   57180  avg (confirmed):   98215  low:   22548  high:  129048
-   ├─ createCourse                -  avg:   44654  avg (confirmed):   45858  low:   21981  high:   45858
-   ├─ register                    -  avg:   37747  avg (confirmed):   38531  low:   22515  high:   38531
-   ├─ getUserCourseFundsRemaining -  avg:   32302  avg (confirmed):   32302  low:   32302  high:   32314
-   ├─ getUserCourseEligibleFunds  -  avg:   29595  avg (confirmed):   29595  low:   27765  high:   31489
-   ├─ verify                      -  avg:   26572  avg (confirmed):   26701  low:   22852  high:   26713
-   ├─ batchDeposit                -  avg:   63394  avg (confirmed):   66838  low:   28978  high:   66838
-   ├─ getCurrentBatchTotal        -  avg:   23050  avg (confirmed):   23050  low:   23050  high:   23050
-   └─ getNextCourseId             -  avg:   22172  avg (confirmed):   22172  low:   22172  high:   22172
+DeSchool <Contract>
+   ├─ constructor       -  avg: 2722866  avg (confirmed): 2722866  low: 2722866  high: 2722866
+   ├─ permitAndRegister -  avg:  146645  avg (confirmed):  146645  low:  146645  high:  146645
+   ├─ createCourse      -  avg:  119368  avg (confirmed):  123066  low:   23221  high:  134617
+   ├─ mint              -  avg:   90247  avg (confirmed):  113111  low:   22621  high:  116626
+   ├─ register          -  avg:   59684  avg (confirmed):   62112  low:   22511  high:   86669
+   └─ redeem            -  avg:   57139  avg (confirmed):   68031  low:   22564  high:   70531
 LearningCurve <Contract>
-   ├─ constructor                 -  avg: 1315019  avg (confirmed): 1315019  low: 1315019  high: 1315019
-   ├─ initialise                  -  avg:   55660  avg (confirmed):   59445  low:   22257  high:   59445
-   ├─ burn                        -  avg:   53597  avg (confirmed):   53597  low:   48292  high:   54291
-   ├─ mint                        -  avg:   46669  avg (confirmed):   46669  low:   46500  high:   46871
-   ├─ getMintableForReserveAmount -  avg:   30090  avg (confirmed):   30090  low:   24477  high:   30476
-   ├─ getBurnableForReserveAmount -  avg:   29568  avg (confirmed):   29568  low:   24430  high:   30429
-   ├─ approve                     -  avg:   29299  avg (confirmed):   29299  low:   29297  high:   29309
-   ├─ balanceOf                   -  avg:   22725  avg (confirmed):   22725  low:   22725  high:   22737
-   ├─ reserveBalance              -  avg:   22181  avg (confirmed):   22181  low:   22181  high:   22181
-   └─ totalSupply                 -  avg:   22160  avg (confirmed):   22160  low:   22160  high:   22160
+   ├─ constructor       -  avg: 1866796  avg (confirmed): 1866796  low: 1866796  high: 1866796
+   ├─ permitAndMint     -  avg:  122563  avg (confirmed):  122563  low:  122563  high:  122563
+   ├─ initialise        -  avg:  119427  avg (confirmed):  132872  low:   22214  high:  132872
+   ├─ burn              -  avg:   65850  avg (confirmed):   65850  low:   65642  high:   66346
+   ├─ mint              -  avg:   61697  avg (confirmed):   61697  low:   61356  high:   62166
+   └─ approve           -  avg:   44103  avg (confirmed):   44103  low:   44101  high:   44113
 ```
