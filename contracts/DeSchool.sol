@@ -190,12 +190,12 @@ contract DeSchool {
         public 
     {
         require(
-            _amount >= courses[_courseId].stake, 
-            "createScholarships: must seed scholarship with enough funds to justify gas costs"
-        );
-        require(
             _courseId < courseIdTracker,
             "createScholarships: courseId does not exist"
+        );
+        require(
+            _amount >= courses[_courseId].stake, 
+            "createScholarships: must seed scholarship with enough funds to justify gas costs"
         );
         Course storage course = courses[_courseId];
         
